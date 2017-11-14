@@ -1,0 +1,7 @@
+[package]
+name = "sera"
+version = "0.1.0"
+authors = ["emekoi <emekankurumeh@outlook.com>"]
+
+[dependencies]
+# num = "*"
