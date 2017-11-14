@@ -1,28 +1,28 @@
 #[allow(unused)]
 macro_rules! min {
     ($a:expr, $b:expr) => {
-        (if $b < $a { $b } else { $a })
+        if $b < $a { $b } else { $a }
     };
 }
 
 #[allow(unused)]
 macro_rules! max {
     ($a:expr, $b:expr) => {
-        (if $b > $a { $b } else { $a })
+        if $b > $a { $b } else { $a }
     };
 }
 
 #[allow(unused)]
 macro_rules! clamp {
     ($x:expr, $a:expr, $b:expr) => {
-        (max!($a, min!($x, $b)))
+        max!($a, min!($x, $b))
     };
 }
 
 #[allow(unused)]
 macro_rules! lerp {
     ($bits:expr, $a:expr, $b:expr, $p:expr) => {
-        (($a) + (((($b) - ($a)) * ($p)) >> ($bits)))
+        ($a) + (((($b) - ($a)) * ($p)) >> ($bits))
     };
 }
 
@@ -76,12 +76,13 @@ pub mod sera {
     }
 
     pub struct Rect {
-        x: i32, y: i32, w: i32, l: i32,
+        x: i32, y: i32, w: i32, h: i32,
     }
 
     pub struct DrawMode {
         color: Pixel,
-        alpha: u8, blend: u8,
+		blend: BlendMode,
+        alpha: u8,
     }
 
     pub struct Transform {
@@ -118,23 +119,52 @@ pub mod sera {
 
 	impl Buffer {
 		// sr_Buffer *sr_newBuffer(int w, int h);
-        pub fn new (w: u32, h:u32) -> Buffer {
+//         pub fn new (w: u32, h:u32) -> Buffer {
             // Buffer { w, h,
             //         pixels: Vec::new(),
             //         mode: DrawMode::(3) }
-        }
+//         }
 		// sr_Buffer *sr_newBufferShared(void *pixels, int w, int h);
         // sr_Buffer *sr_cloneBuffer(sr_Buffer *src);
         // void sr_destroyBuffer(sr_Buffer* b);
 
         // void sr_loadPixels(sr_Buffer *b, void *src, int fmt);
     	// void sr_loadPixels8(sr_Buffer *b, unsigned char *src, sr_Pixel *pal);
-        //
+
     	// void sr_setAlpha(sr_Buffer* b, int alpha);
+		pub fn setAlpha(&mut self, alpha: u8) {
+			self.mode.alpha = alpha;
+		}
     	// void sr_setBlend(sr_Buffer* b, int blend);
+		pub fn setBlend(&mut self, mode: BlendMode) {
+			self.mode.blend = mode;
+		}
     	// void sr_setColor(sr_Buffer* b, sr_Pixel c);
+		pub fn setColor(&mut self, c: Pixel) {
+			self.mode.color.word = unsafe { c.word & RGB_MASK };
+		}
+		
+		fn clipRect(r: &mut Rect, to: &Rect) {
+  			let x1 = max!(r.x, to.x);
+  			let y1 = max!(r.y, to.y);
+  			let x2 = min!(r.x + r.w, to.x + to.w);
+ 			let y2 = min!(r.y + r.h, to.y + to.h);
+  			r.x = x1;
+  			r.y = y1;
+  			r.w = max!(x2 - x1, 0);
+  			r.h = max!(y2 - y1, 0);
+		}
+		
     	// void sr_setClip(sr_Buffer *b, sr_Rect r);
+		pub fn setClip(&mut self, r: mut Rect) {
+			self.clip = r;
+  			r = Rect { x: 0, y: 0, w: self.w, h: self.h };
+  			Buffer::clipRect(&self.clip, &r);
+		}
     	// void sr_reset(sr_Buffer *b);
+		pub fn reset(&self) {
+			
+		}
         //
     	// void sr_clear(sr_Buffer *b, sr_Pixel c);
     	// sr_Pixel sr_getPixel(sr_Buffer *b, int x, int y);
@@ -152,30 +182,4 @@ pub mod sera {
     	// void sr_drawBuffer(sr_Buffer *b, sr_Buffer *src, int x, int y, sr_Rect *sub, sr_Transform *t);
 	}
 
-}
-
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn pixel_format() {  }
-
-    #[test]
-    fn blend_mode() {  }
-
-    #[test]
-    fn pixel() {  }
-
-    #[test]
-    fn rect() {  }
-
-    #[test]
-    fn draw_mode() {  }
-
-    #[test]
-    fn transform() {  }
-
-    #[test]
-    fn buffer() {  }
 }
