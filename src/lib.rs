@@ -39,6 +39,28 @@ macro_rules! swap {
 
 #[allow(dead_code)]
 pub mod sera {
+    fn rgb_mask() -> u32 {
+        if cfg!(SR_MODE_RGBA) {
+            return 0xffffff;
+        } else if cfg!(SR_MODE_ARGB) {
+            return 0xffffff00;
+        } else if cfg!(SR_MODE_ABGR) {
+            return 0xffffff00
+        } else {
+            return 0xffffff;
+        }
+    }
+
+    // #if SR_MODE_RGBA
+    //   #define SR_CHANNELS r, g, b, a
+    // #elif SR_MODE_ARGB
+    //   #define SR_CHANNELS a, r, g, b
+    // #elif SR_MODE_ABGR
+    //   #define SR_CHANNELS a, b, g, r
+    // #else
+    //   #define SR_CHANNELS b, g, r, a
+    // #endif
+
 	const BUFFER_SHARED: u32 = 1 << 0;
 
     const PI: f64 = 3.14159265358979323846264338327950288f64;
@@ -70,6 +92,8 @@ pub mod sera {
 	  DIFFERENCE,
 	}
 
+    #[derive(Clone)]
+    #[derive(Copy)]
     pub union Pixel {
         word: u32,
         rgba: (u8, u8, u8, u8),
@@ -132,19 +156,21 @@ pub mod sera {
     	// void sr_loadPixels8(sr_Buffer *b, unsigned char *src, sr_Pixel *pal);
 
     	// void sr_setAlpha(sr_Buffer* b, int alpha);
-		pub fn setAlpha(&mut self, alpha: u8) {
+		pub fn set_alpha(&mut self, alpha: u8) {
 			self.mode.alpha = alpha;
 		}
+
     	// void sr_setBlend(sr_Buffer* b, int blend);
-		pub fn setBlend(&mut self, mode: BlendMode) {
+		pub fn set_blend(&mut self, mode: BlendMode) {
 			self.mode.blend = mode;
 		}
+
     	// void sr_setColor(sr_Buffer* b, sr_Pixel c);
-		pub fn setColor(&mut self, c: Pixel) {
-			self.mode.color.word = unsafe { c.word & RGB_MASK };
+		pub fn set_color(&mut self, c: Pixel) {
+			self.mode.color.word = unsafe { c.word & rgb_mask() };
 		}
-		
-		fn clipRect(r: &mut Rect, to: &Rect) {
+
+		fn clip_rect(r: &mut Rect, to: &Rect) {
   			let x1 = max!(r.x, to.x);
   			let y1 = max!(r.y, to.y);
   			let x2 = min!(r.x + r.w, to.x + to.w);
@@ -154,21 +180,43 @@ pub mod sera {
   			r.w = max!(x2 - x1, 0);
   			r.h = max!(y2 - y1, 0);
 		}
-		
+
     	// void sr_setClip(sr_Buffer *b, sr_Rect r);
-		pub fn setClip(&mut self, r: mut Rect) {
+		pub fn set_clip(&mut self, r: Rect) {
 			self.clip = r;
-  			r = Rect { x: 0, y: 0, w: self.w, h: self.h };
-  			Buffer::clipRect(&self.clip, &r);
+  			let r = Rect { x: 0, y: 0, w: self.w, h: self.h };
+  			Buffer::clip_rect(&mut self.clip, &r);
 		}
+
     	// void sr_reset(sr_Buffer *b);
-		pub fn reset(&self) {
-			
+		pub fn reset(&mut self) {
+            self.set_blend(BlendMode::ALPHA);
+            self.set_alpha(0xff);
+            self.set_color(Pixel::color(0xff, 0xff, 0xff));
+            let (w, h) = (self.w, self.h);
+            self.set_clip(Rect{ x: 0, y: 0, w, h });
 		}
-        //
-    	// void sr_clear(sr_Buffer *b, sr_Pixel c);
+
+        // void sr_clear(sr_Buffer *b, sr_Pixel c);
+        pub fn clear(&mut self, c: Pixel) {
+          self.pixels = vec![c; self.pixels.len()];
+        }
+
     	// sr_Pixel sr_getPixel(sr_Buffer *b, int x, int y);
+        pub fn get_pixel(&self, x: i32, y: i32) -> Pixel {
+          if x >= 0 && y >= 0 && x < self.w && y < self.h {
+            return self.pixels[(x + y * self.w) as usize];
+          }
+          return Pixel { word: 0 };
+        }
+
     	// void sr_setPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
+        pub fn set_pixel(&mut self, c: Pixel, x: i32, y: i32) {
+          if x >= 0 && y >= 0 && x < self.w && y < self.h {
+            self.pixels[(x + y * self.w) as usize] = c;
+          }
+        }
+
     	// void sr_copyPixels(sr_Buffer *b, sr_Buffer *src, int x, int y, sr_Rect *sub, float sx, float sy);
     	// void sr_noise(sr_Buffer *b, unsigned seed, int low, int high, int grey);
     	// void sr_floodFill(sr_Buffer *b, sr_Pixel c, int x, int y);
