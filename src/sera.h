@@ -48,8 +48,6 @@ typedef struct {
   char flags;
 } sr_Buffer; // DONE
 
-#define SR_BUFFER_SHARED (1 << 0) // DONE
-
 enum {
   SR_FMT_BGRA, // DONE
   SR_FMT_RGBA, // DONE
@@ -70,28 +68,26 @@ enum {
 };
 
 
-sr_Pixel sr_pixel(int r, int g, int b, int a);
-sr_Pixel sr_color(int r, int g, int b);
-sr_Transform sr_transform(float ox, float oy, float r, float sx, float sy);
-sr_Rect sr_rect(int x, int y, int w, int h);
+/* DONE */ sr_Pixel sr_pixel(int r, int g, int b, int a);
+/* DONE */ sr_Pixel sr_color(int r, int g, int b);
+/* DONE */ sr_Transform sr_transform(float ox, float oy, float r, float sx, float sy);
+/* DONE */ sr_Rect sr_rect(int x, int y, int w, int h);
 
-sr_Buffer *sr_newBuffer(int w, int h);
-sr_Buffer *sr_newBufferShared(void *pixels, int w, int h);
-sr_Buffer *sr_cloneBuffer(sr_Buffer *src);
-void sr_destroyBuffer(sr_Buffer* b);
+/* DONE */ sr_Buffer *sr_newBuffer(int w, int h);
+/* DONE */ sr_Buffer *sr_cloneBuffer(sr_Buffer *src);
 
-void sr_loadPixels(sr_Buffer *b, void *src, int fmt);
-void sr_loadPixels8(sr_Buffer *b, unsigned char *src, sr_Pixel *pal);
+/* DONE */ void sr_loadPixels(sr_Buffer *b, void *src, int fmt);
+/* DONE */ void sr_loadPixels8(sr_Buffer *b, unsigned char *src, sr_Pixel *pal);
 
-void sr_setAlpha(sr_Buffer* b, int alpha);
-void sr_setBlend(sr_Buffer* b, int blend);
-void sr_setColor(sr_Buffer* b, sr_Pixel c);
-void sr_setClip(sr_Buffer *b, sr_Rect r);
-void sr_reset(sr_Buffer *b);
+/* DONE */ void sr_setAlpha(sr_Buffer* b, int alpha);
+/* DONE */ void sr_setBlend(sr_Buffer* b, int blend);
+/* DONE */ void sr_setColor(sr_Buffer* b, sr_Pixel c);
+/* DONE */ void sr_setClip(sr_Buffer *b, sr_Rect r);
+/* DONE */ void sr_reset(sr_Buffer *b);
 
-void sr_clear(sr_Buffer *b, sr_Pixel c);
-sr_Pixel sr_getPixel(sr_Buffer *b, int x, int y);
-void sr_setPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
+/* DONE */ void sr_clear(sr_Buffer *b, sr_Pixel c);
+/* DONE */ sr_Pixel sr_getPixel(sr_Buffer *b, int x, int y);
+/* DONE */ void sr_setPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
 void sr_copyPixels(sr_Buffer *b, sr_Buffer *src, int x, int y,
                    sr_Rect *sub, float sx, float sy);
 void sr_noise(sr_Buffer *b, unsigned seed, int low, int high, int grey);
