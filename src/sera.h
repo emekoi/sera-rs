@@ -88,10 +88,10 @@ enum {
 /* DONE */ void sr_clear(sr_Buffer *b, sr_Pixel c);
 /* DONE */ sr_Pixel sr_getPixel(sr_Buffer *b, int x, int y);
 /* DONE */ void sr_setPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
-void sr_copyPixels(sr_Buffer *b, sr_Buffer *src, int x, int y,
+/* DONE */ void sr_copyPixels(sr_Buffer *b, sr_Buffer *src, int x, int y,
                    sr_Rect *sub, float sx, float sy);
-void sr_noise(sr_Buffer *b, unsigned seed, int low, int high, int grey);
-void sr_floodFill(sr_Buffer *b, sr_Pixel c, int x, int y);
+/* DONE */ void sr_noise(sr_Buffer *b, unsigned seed, int low, int high, int grey);
+/* DONE */ void sr_floodFill(sr_Buffer *b, sr_Pixel c, int x, int y);
 
 void sr_drawPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
 void sr_drawLine(sr_Buffer *b, sr_Pixel c, int x0, int y0, int x1, int y1);
