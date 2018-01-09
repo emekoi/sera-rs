@@ -25,20 +25,20 @@
 typedef union {
   unsigned int word;
   struct { unsigned char SR_CHANNELS; } rgba;
-} sr_Pixel; // DONE
+} sr_Pixel; /* DONE */
 
 typedef struct {
   int x, y, w, h;
-} sr_Rect; // DONE
+} sr_Rect; /* DONE */
 
 typedef struct {
   sr_Pixel color;
   unsigned char alpha, blend;
-} sr_DrawMode; // DONE
+} sr_DrawMode; /* DONE */
 
 typedef struct {
   float ox, oy, r, sx, sy;
-} sr_Transform; // DONE
+} sr_Transform; /* DONE */
 
 typedef struct {
   sr_DrawMode mode;
@@ -46,25 +46,25 @@ typedef struct {
   sr_Pixel *pixels;
   int w, h;
   char flags;
-} sr_Buffer; // DONE
+} sr_Buffer; /* DONE */
 
 enum {
-  SR_FMT_BGRA, // DONE
-  SR_FMT_RGBA, // DONE
-  SR_FMT_ARGB, // DONE
-  SR_FMT_ABGR // DONE
+  SR_FMT_BGRA, /* DONE */
+  SR_FMT_RGBA, /* DONE */
+  SR_FMT_ARGB, /* DONE */
+  SR_FMT_ABGR /* DONE */
 };
 
 enum {
-  SR_BLEND_ALPHA, // DONE
-  SR_BLEND_COLOR, // DONE
-  SR_BLEND_ADD, // DONE
-  SR_BLEND_SUBTRACT, // DONE
-  SR_BLEND_MULTIPLY, // DONE
-  SR_BLEND_LIGHTEN, // DONE
-  SR_BLEND_DARKEN, // DONE
-  SR_BLEND_SCREEN, // DONE
-  SR_BLEND_DIFFERENCE // DONE
+  SR_BLEND_ALPHA, /* DONE */
+  SR_BLEND_COLOR, /* DONE */
+  SR_BLEND_ADD, /* DONE */
+  SR_BLEND_SUBTRACT, /* DONE */
+  SR_BLEND_MULTIPLY, /* DONE */
+  SR_BLEND_LIGHTEN, /* DONE */
+  SR_BLEND_DARKEN, /* DONE */
+  SR_BLEND_SCREEN, /* DONE */
+  SR_BLEND_DIFFERENCE /* DONE */
 };
 
 
@@ -93,12 +93,12 @@ enum {
 /* DONE */ void sr_noise(sr_Buffer *b, unsigned seed, int low, int high, int grey);
 /* DONE */ void sr_floodFill(sr_Buffer *b, sr_Pixel c, int x, int y);
 
-void sr_drawPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
-void sr_drawLine(sr_Buffer *b, sr_Pixel c, int x0, int y0, int x1, int y1);
-void sr_drawRect(sr_Buffer *b, sr_Pixel c, int x, int y, int w, int h);
-void sr_drawBox(sr_Buffer *b, sr_Pixel c, int x, int y, int w, int h);
-void sr_drawCircle(sr_Buffer *b, sr_Pixel c, int x, int y, int r);
-void sr_drawRing(sr_Buffer *b, sr_Pixel c, int x, int y, int r);
+/* DONE */ void sr_drawPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
+/* DONE */ void sr_drawLine(sr_Buffer *b, sr_Pixel c, int x0, int y0, int x1, int y1);
+/* DONE */ void sr_drawRect(sr_Buffer *b, sr_Pixel c, int x, int y, int w, int h);
+/* DONE */ void sr_drawBox(sr_Buffer *b, sr_Pixel c, int x, int y, int w, int h);
+/* DONE */ void sr_drawCircle(sr_Buffer *b, sr_Pixel c, int x, int y, int r);
+/* DONE */ void sr_drawRing(sr_Buffer *b, sr_Pixel c, int x, int y, int r);
 void sr_drawBuffer(sr_Buffer *b, sr_Buffer *src, int x, int y,
                    sr_Rect *sub, sr_Transform *t);
 

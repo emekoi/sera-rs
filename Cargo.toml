@@ -4,4 +4,10 @@ version = "0.1.0"
 authors = ["emekoi <emekankurumeh@outlook.com>"]
 
 [dependencies]
-# num = "*"
+
+[features]
+default = ["MODE_BGRA"]
+MODE_RGBA = []
+MODE_ARGB = []
+MODE_ABGR = []
+MODE_BGRA = []
