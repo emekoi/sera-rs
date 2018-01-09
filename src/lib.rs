@@ -299,6 +299,7 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
     return;
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum PixelFormat {
     BGRA,
     RGBA,
@@ -306,6 +307,7 @@ pub enum PixelFormat {
     ABGR,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum BlendMode {
     ALPHA,
     COLOR,
@@ -319,7 +321,6 @@ pub enum BlendMode {
 }
 
 #[cfg(feature = "MODE_RGBA")]
-#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Channel {
     pub r: u8,
@@ -328,7 +329,6 @@ pub struct Channel {
     pub a: u8,
 }
 #[cfg(feature = "MODE_ARGB")]
-#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Channel {
     pub a: u8,
@@ -362,7 +362,7 @@ impl Channel {
 #[derive(Clone, Copy)]
 pub union Pixel {
     pub word: u32,
-    rgba: Channel,
+    pub rgba: Channel,
 }
 
 impl Pixel {
@@ -403,11 +403,12 @@ impl fmt::Debug for Pixel {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Rect {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
 }
 
 impl Rect {
@@ -416,10 +417,11 @@ impl Rect {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct DrawMode {
-    color: Pixel,
-    blend: BlendMode,
-    alpha: u8,
+    pub color: Pixel,
+    pub blend: BlendMode,
+    pub alpha: u8,
 }
 
 impl DrawMode {
@@ -432,12 +434,13 @@ impl DrawMode {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Transform {
-    ox: f32,
-    oy: f32,
-    r: f32,
-    sx: f32,
-    sy: f32,
+    pub ox: f32,
+    pub oy: f32,
+    pub r: f32,
+    pub sx: f32,
+    pub sy: f32,
 }
 
 impl Transform {
@@ -446,13 +449,14 @@ impl Transform {
     }
 }
 
+// #[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct Buffer {
-    mode: DrawMode,
-    clip: Rect,
+    pub mode: DrawMode,
+    pub clip: Rect,
     pub pixels: Vec<Pixel>,
     pub w: i32,
     pub h: i32,
-    // flags: u16
 }
 
 impl Buffer {
