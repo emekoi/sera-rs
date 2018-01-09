@@ -52,7 +52,7 @@ const RGB_MASK: u32 = 0xffffff;
 const RGB_MASK: u32 = 0xffffff00;
 #[cfg(feature = "MODE_ABGR")]
 const RGB_MASK: u32 = 0xffffff00;
-#[cfg(feature = "MODE_BGRA")]
+// #[cfg(feature = "MODE_BGRA")]
 const RGB_MASK: u32 = 0xffffff;
 
 static mut INITED: bool = false;
@@ -207,6 +207,31 @@ fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
     }
 }
 
+fn floodFill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
+    unsafe {
+        if y < 0 || y >= b.h || x < 0 || x >= b.w ||
+        b.pixels[(x + y * b.w) as usize].word != o.word { return }
+        /* Fill left */
+        let mut il = x;
+        while il >= 0 && b.pixels[(il + y * b.w) as usize].word == o.word {
+            b.pixels[(il + y * b.w) as usize] = color;
+            il -= 1;
+        }
+        /* Fill right */
+        let mut ir = if x < b.w - 1 { x + 1 } else { x };
+        while ir < b.w && b.pixels[(ir + y * b.w) as usize].word == o.word {
+            b.pixels[(ir + y * b.w) as usize] = color;
+            ir += 1;
+        }
+        /* Fill up and down */
+        while (il <= ir) {
+            floodFill(b, color, o, il, y - 1);
+            floodFill(b, color, o, il, y + 1);
+            il += 1;
+        }   
+    }
+}
+
 fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
     unsafe {
         let alpha = sh8!(tu32!(s.rgba.a) * tu32!(m.alpha), >>) as u8;
@@ -332,7 +357,7 @@ pub struct Channel {
     pub g: u8,
     pub r: u8,
 }
-#[cfg(feature = "MODE_BGRA")]
+// #[cfg(feature = "MODE_BGRA")]
 #[derive(Debug, Copy, Clone)]
 pub struct Channel {
     pub b: u8,
@@ -610,7 +635,7 @@ impl Buffer {
 
     pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
         let px = self.get_pixel(x, y);
-        flood_fill(self, c, px, x, y);
+        floodFill(self, c, px, x, y);
     }
 
     // void sr_drawPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
@@ -788,4 +813,6 @@ mod tests {
 
 fn main() {
     println!("HELLO WORLD");
+    let mut b = Buffer::new(512, 512);
+    b.flood_fill(Pixel::color(0,0,0),0,0);
 }
