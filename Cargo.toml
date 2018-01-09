@@ -6,7 +6,7 @@ authors = ["emekoi <emekankurumeh@outlook.com>"]
 [dependencies]
 
 [features]
-default = ["MODE_BGRA"]
+default = []
 MODE_RGBA = []
 MODE_ARGB = []
 MODE_ABGR = []
