@@ -4,21 +4,9 @@
 use std::{fmt, mem, f32};
 use std::os::raw::c_void;
 
-macro_rules! min {
-  ($a:expr, $b:expr) => {
-      if $b < $a { $b } else { $a }
-  };
-}
-
-macro_rules! max {
-  ($a:expr, $b:expr) => {
-      if $b > $a { $b } else { $a }
-  };
-}
-
 macro_rules! clamp {
   ($x:expr, $a:expr, $b:expr) => {
-      max!($a, min!($x, $b))
+      $x.min($b).max($a)
   };
 }
 
@@ -96,10 +84,10 @@ fn xdiv(n: i32, x: i32) -> i32 {
 }
 
 fn clip_rect(r: &mut Rect, to: &Rect) {
-    let x1 = max!(r.x, to.x);
-    let y1 = max!(r.y, to.y);
-    let x2 = min!(r.x + r.w, to.x + to.w);
-    let y2 = min!(r.y + r.h, to.y + to.h);
+    let x1 = r.x.max(to.x);
+    let y1 = r.y.max(to.y);
+    let x2 = (r.x + r.w).min(to.x + to.w);
+    let y2 = (r.y + r.h).min(to.y + to.h);
     r.x = x1;
     r.w = x2 - x1;
     r.y = y1;
@@ -199,7 +187,7 @@ fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
     unsafe {
         if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize].word != o.word
         {
-            return;
+            return
         }
         let mut il = x;
         while il >= 0 && b.pixels[(il + y * b.w) as usize].word == o.word {
@@ -212,7 +200,7 @@ fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
             ir += 1;
         }
         while il <= ir {
-            flood_fill(b, color, o, il, y.wrapping_sub(1));
+            flood_fill(b, color, o, il, y - 1);
             flood_fill(b, color, o, il, y + 1);
             il += 1;
         }
@@ -235,14 +223,14 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
             BlendMode::ALPHA => {}
             BlendMode::COLOR => s = m.color,
             BlendMode::ADD => {
-                s.rgba.r = min!(tu32!(d.rgba.r) + tu32!(s.rgba.r), 0xff) as u8;
-                s.rgba.g = min!(tu32!(d.rgba.g) + tu32!(s.rgba.g), 0xff) as u8;
-                s.rgba.b = min!(tu32!(d.rgba.b) + tu32!(s.rgba.b), 0xff) as u8;
+                s.rgba.r = 0xff.min(tu32!(d.rgba.r) + tu32!(s.rgba.r)) as u8;
+                s.rgba.g = 0xff.min(tu32!(d.rgba.g) + tu32!(s.rgba.g)) as u8;
+                s.rgba.b = 0xff.min(tu32!(d.rgba.b) + tu32!(s.rgba.b)) as u8;
             }
             BlendMode::SUBTRACT => {
-                s.rgba.r = min!(i32::from(d.rgba.r) - i32::from(s.rgba.r), 0x00i32) as u8;
-                s.rgba.g = min!(i32::from(d.rgba.g) - i32::from(s.rgba.g), 0x00i32) as u8;
-                s.rgba.b = min!(i32::from(d.rgba.b) - i32::from(s.rgba.b), 0x00i32) as u8;
+                s.rgba.r = 0x00i32.min(i32::from(d.rgba.r) - i32::from(s.rgba.r)) as u8;
+                s.rgba.g = 0x00i32.min(i32::from(d.rgba.g) - i32::from(s.rgba.g)) as u8;
+                s.rgba.b = 0x00i32.min(i32::from(d.rgba.b) - i32::from(s.rgba.b)) as u8;
             }
             BlendMode::MULTIPLY => {
                 s.rgba.r = sh8!(u32::from(s.rgba.r) * tu32!(d.rgba.r), >>) as u8;
@@ -598,12 +586,12 @@ impl Buffer {
 
     pub fn noise(&mut self, seed: u32, high: u8, low: u8, grey: bool) {
         let mut s = RandState::new(seed);
-        let low = min!(low, 0xfe);
-        let high = max!(high, low + 1);
+        let low = 0xfe.min(low);
+        let high = high.max(low + 1);
         unsafe {
             if grey {
                 for i in 0..(self.w * self.h) as usize {
-                    let px = low + s.rand() as u8 % (high - low);
+                    let px = (low + s.rand() as u8) % (high - low);
                     self.pixels[i].rgba = Channel::new(px, px, px, 0xff);
                 }
             } else {
@@ -789,7 +777,13 @@ impl RandState {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
+
+    #[test]
+    fn flood() {
+        let mut b = Buffer::new(512, 512);
+        b.flood_fill(Pixel::color(0,0,0),0,0);
+    }
 }
 
 fn main() {
