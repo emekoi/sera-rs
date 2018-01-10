@@ -52,7 +52,7 @@ const RGB_MASK: u32 = 0xffffff;
 const RGB_MASK: u32 = 0xffffff00;
 #[cfg(feature = "MODE_ABGR")]
 const RGB_MASK: u32 = 0xffffff00;
-// #[cfg(feature = "MODE_BGRA")]
+#[cfg(feature = "MODE_BGRA")]
 const RGB_MASK: u32 = 0xffffff;
 
 static mut INITED: bool = false;
@@ -357,7 +357,7 @@ pub struct Channel {
     pub g: u8,
     pub r: u8,
 }
-// #[cfg(feature = "MODE_BGRA")]
+#[cfg(feature = "MODE_BGRA")]
 #[derive(Debug, Copy, Clone)]
 pub struct Channel {
     pub b: u8,
