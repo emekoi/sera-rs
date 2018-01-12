@@ -39,9 +39,9 @@ macro_rules! ti32 {
 macro_rules! draw_row {
     ($buf: expr, $rows: expr, $c:expr, $x:expr, $y:expr, $len:expr) => {
         let y__ = $y;
-        if !$rows[y__ as usize >> 5] & (1 << (y__ & 31)) > 0 {
+        if y__ >= 0 && !$rows[y__ as usize >> 5] & (1 << (y__ & 31)) > 0 {
             $buf.draw_rect($c, $x, y__, $len, 1);
-            $rows[y__ as usize>> 5] |= 1 << (y__ & 31);
+            $rows[y__ as usize >> 5] |= 1 << (y__ & 31);
         }
     };
 }
@@ -207,28 +207,50 @@ fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
     }
 }
 
-fn floodFill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
+fn __flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
     unsafe {
-        if y < 0 || y >= b.h || x < 0 || x >= b.w ||
-        b.pixels[(x + y * b.w) as usize].word != o.word { return }
-        /* Fill left */
-        let mut il = x;
-        while il >= 0 && b.pixels[(il + y * b.w) as usize].word == o.word {
-            b.pixels[(il + y * b.w) as usize] = color;
-            il -= 1;
+        if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize] != o
+        {
+            return
         }
-        /* Fill right */
-        let mut ir = if x < b.w - 1 { x + 1 } else { x };
-        while ir < b.w && b.pixels[(ir + y * b.w) as usize].word == o.word {
-            b.pixels[(ir + y * b.w) as usize] = color;
-            ir += 1;
+        let mut x1 = x;
+        while x1 < b.w && b.pixels[(x1 + y * b.w) as usize] == o {
+            b.pixels[(x1 + y * b.w) as usize] = color;
+            x1 += 1;
         }
-        /* Fill up and down */
-        while (il <= ir) {
-            floodFill(b, color, o, il, y - 1);
-            floodFill(b, color, o, il, y + 1);
-            il += 1;
-        }   
+        x1 = x -1;
+        while x1 >= 0 && b.pixels[(x1 + y * b.w) as usize] == o {
+            b.pixels[(x1 + y * b.w) as usize] = color;
+            x1 -= 1;
+        }
+        x1 = x;
+        while x1 < b.w && b.pixels[(x1 + y * b.w) as usize] == color {
+           if y > 0 && b.pixels[(x1 + (y - 1) * b.w) as usize] == o {
+             __flood_fill(b, color, o, x1, y - 1);
+           }
+           x1 += 1;
+         }
+         x1 = x - 1;
+         while x1 >= 0 && b.pixels[(x1 + y * b.w) as usize] == color {
+           if y > 0 && b.pixels[(x1 + (y - 1) * b.w) as usize] == o {
+             __flood_fill(b, color, o, x1, y - 1);
+           }
+           x1 -= 1;
+         }
+         x1 = x;
+         while x1 < b.w && b.pixels[(x1 + y * b.w) as usize] == color {
+           if y < b.h - 1 && b.pixels[(x1 + (y + 1) * b.w) as usize] == o {
+             __flood_fill(b, color, o, x1, y + 1);
+           }
+           x1 += 1;
+         }
+         x1 = x - 1;
+         while x1 >= 0 && b.pixels[(x1 + y * b.w) as usize] == color {
+           if y < b.h - 1 && b.pixels[(x1 + (y + 1) * b.w) as usize] == o {
+             __flood_fill(b, color, o, x1, y + 1);
+           }
+           x1 -= 1;
+         }
     }
 }
 
@@ -635,7 +657,7 @@ impl Buffer {
 
     pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
         let px = self.get_pixel(x, y);
-        floodFill(self, c, px, x, y);
+        __flood_fill(self, c, px, x, y);
     }
 
     // void sr_drawPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
@@ -712,7 +734,7 @@ impl Buffer {
 
     // void sr_drawCircle(sr_Buffer *b, sr_Pixel c, int x, int y, int r);
     pub fn draw_circle(&mut self, c: Pixel, x: i32, y: i32, radius: i32) {
-        let mut dx = radius;
+        let mut dx = radius.abs();
         let mut dy = 0;
         let mut radius_error = 1 - dx;
         let mut rows: [u32; 512] = [0; 512];
@@ -805,10 +827,54 @@ mod tests {
     use super::*;
 
     #[test]
-    fn flood() {
+    fn noise() {
         let mut b = Buffer::new(512, 512);
-        b.flood_fill(Pixel::color(0,0,0),0,0);
+        b.noise(54535957, 0, 255, false);
     }
+
+    #[test]
+    fn flood_fill() {
+        let mut b = Buffer::new(512, 512);
+        b.flood_fill(Pixel::color(0, 0, 0), 0,0);
+    }
+
+    #[test]
+    fn draw_pixel() {
+        let mut b = Buffer::new(512, 512);
+        b.draw_pixel(Pixel::color(255, 0, 255), 255, 255);
+    }
+
+    #[test]
+    fn draw_line() {
+        let mut b = Buffer::new(512, 512);
+        b.draw_line(Pixel::color(255, 0, 255), 255, 255, 0, 0);
+    }
+
+    #[test]
+    fn draw_rect() {
+        let mut b = Buffer::new(512, 512);
+        b.draw_rect(Pixel::color(255, 0, 255), 0, 0, 255, 255);
+    }
+
+    #[test]
+    fn draw_box() {
+        let mut b = Buffer::new(512, 512);
+        b.draw_box(Pixel::color(255, 0, 255), 0, 0, 255, 255);
+    }
+
+    #[test]
+    fn draw_circle() {
+        let mut b = Buffer::new(512, 512);
+        b.draw_circle(Pixel::color(255, 0, 255), 0, 0, 255);
+    }
+
+    #[test]
+    fn draw_ring() {
+        let mut b = Buffer::new(512, 512);
+        b.draw_ring(Pixel::color(255, 0, 255), 0, 0, 255);
+    }
+
+
 }
 
 fn main() {
