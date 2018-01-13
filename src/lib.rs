@@ -1,14 +1,10 @@
-#![allow(dead_code)]
-#![allow(unused)]
-
 use std::{fmt, mem, f32};
-use std::os::raw::c_void;
 
-macro_rules! clamp {
-  ($x:expr, $a:expr, $b:expr) => {
-      $x.min($b).max($a)
-  };
-}
+//macro_rules! clamp {
+//  ($x:expr, $a:expr, $b:expr) => {
+//      $x.min($b).max($a)
+//  };
+//}
 
 macro_rules! lerp {
   ($bits:expr, $a:expr, $b:expr, $p:expr) => {
@@ -32,10 +28,6 @@ macro_rules! tu32 {
     ($a:expr) => { u32::from($a) }
 }
 
-macro_rules! ti32 {
-    ($a:expr) => { i32::from($a) }
-}
-
 macro_rules! draw_row {
     ($buf: expr, $rows: expr, $c:expr, $x:expr, $y:expr, $len:expr) => {
         let y__ = $y;
@@ -44,36 +36,6 @@ macro_rules! draw_row {
             $rows[y__ as usize >> 5] |= 1 << (y__ & 31);
         }
     };
-}
-
-#[cfg(feature = "MODE_RGBA")]
-const RGB_MASK: u32 = 0xffffff;
-#[cfg(feature = "MODE_ARGB")]
-const RGB_MASK: u32 = 0xffffff00;
-#[cfg(feature = "MODE_ABGR")]
-const RGB_MASK: u32 = 0xffffff00;
-#[cfg(feature = "MODE_BGRA")]
-const RGB_MASK: u32 = 0xffffff;
-
-static mut INITED: bool = false;
-static mut DIV8_TABLE: [[u8; 256]; 256] = [[0; 256]; 256];
-
-const FX_BITS: u32 = 12;
-const FX_UNIT: u32 = 1 << FX_BITS;
-const FX_MASK: u32 = FX_UNIT - 1;
-
-fn init_8bit() {
-    unsafe {
-        if INITED {
-            return;
-        }
-        for b in 1..256 {
-            for (a, t) in DIV8_TABLE.iter_mut().enumerate().take(256).skip(1) {
-                t[b] = ((a << 8) / b) as u8;
-            }
-        }
-        INITED = true;
-    }
 }
 
 fn xdiv(n: i32, x: i32) -> i32 {
@@ -183,76 +145,28 @@ fn copy_pixels_scaled(
     }
 }
 
-fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
-    unsafe {
-        if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize].word != o.word
-        {
-            return
-        }
-        let mut il = x;
-        while il >= 0 && b.pixels[(il + y * b.w) as usize].word == o.word {
-            b.pixels[(il + y * b.w) as usize] = color;
-            il -= 1;
-        }
-        let mut ir = if x < b.w - 1 { x + 1 } else { x };
-        while ir < b.w && b.pixels[(ir + y * b.w) as usize].word == o.word {
-            b.pixels[(ir + y * b.w) as usize] = color;
-            ir += 1;
-        }
-        while il <= ir {
-            flood_fill(b, color, o, il, y - 1);
-            flood_fill(b, color, o, il, y + 1);
-            il += 1;
-        }
-    }
-}
-
-fn __flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
-    unsafe {
-        if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize] != o
-        {
-            return
-        }
-        let mut x1 = x;
-        while x1 < b.w && b.pixels[(x1 + y * b.w) as usize] == o {
-            b.pixels[(x1 + y * b.w) as usize] = color;
-            x1 += 1;
-        }
-        x1 = x -1;
-        while x1 >= 0 && b.pixels[(x1 + y * b.w) as usize] == o {
-            b.pixels[(x1 + y * b.w) as usize] = color;
-            x1 -= 1;
-        }
-        x1 = x;
-        while x1 < b.w && b.pixels[(x1 + y * b.w) as usize] == color {
-           if y > 0 && b.pixels[(x1 + (y - 1) * b.w) as usize] == o {
-             __flood_fill(b, color, o, x1, y - 1);
-           }
-           x1 += 1;
-         }
-         x1 = x - 1;
-         while x1 >= 0 && b.pixels[(x1 + y * b.w) as usize] == color {
-           if y > 0 && b.pixels[(x1 + (y - 1) * b.w) as usize] == o {
-             __flood_fill(b, color, o, x1, y - 1);
-           }
-           x1 -= 1;
-         }
-         x1 = x;
-         while x1 < b.w && b.pixels[(x1 + y * b.w) as usize] == color {
-           if y < b.h - 1 && b.pixels[(x1 + (y + 1) * b.w) as usize] == o {
-             __flood_fill(b, color, o, x1, y + 1);
-           }
-           x1 += 1;
-         }
-         x1 = x - 1;
-         while x1 >= 0 && b.pixels[(x1 + y * b.w) as usize] == color {
-           if y < b.h - 1 && b.pixels[(x1 + (y + 1) * b.w) as usize] == o {
-             __flood_fill(b, color, o, x1, y + 1);
-           }
-           x1 -= 1;
-         }
-    }
-}
+//fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
+//    unsafe {
+//        if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize] != o {
+//            return;
+//        }
+//        let mut il = x;
+//        while il >= 0 && b.pixels[(il + y * b.w) as usize] == o {
+//            b.pixels[(il + y * b.w) as usize] = color;
+//            il -= 1;
+//        }
+//        let mut ir = if x < b.w - 1 { x + 1 } else { x };
+//        while ir < b.w && b.pixels[(ir + y * b.w) as usize] == o {
+//            b.pixels[(ir + y * b.w) as usize] = color;
+//            ir += 1;
+//        }
+//        while il <= ir {
+//            flood_fill(b, color, o, il, y - 1);
+//            flood_fill(b, color, o, il, y + 1);
+//            il += 1;
+//        }
+//    }
+//}
 
 fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
     unsafe {
@@ -320,18 +234,78 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
             let a = (0xff - ((tu32!(0xff - d.rgba.a) * tu32!(0xff - alpha)) >> 8)) as u8;
             let zeta = (tu32!(d.rgba.a * (0xff - alpha)) >> 8) as u8;
             d.rgba.r = DIV8_TABLE[(sh8!(tu32!(d.rgba.r) * tu32!(zeta), >>)
-                                      + sh8!(tu32!(s.rgba.r) * tu32!(alpha), >>))
-                                      as usize][a as usize];
+                + sh8!(tu32!(s.rgba.r) * tu32!(alpha), >>))
+                as usize][a as usize];
             d.rgba.g = DIV8_TABLE[(sh8!(tu32!(d.rgba.g) * tu32!(zeta), >>)
-                                      + sh8!(tu32!(s.rgba.g) * tu32!(alpha), >>))
-                                      as usize][a as usize];
+                + sh8!(tu32!(s.rgba.g) * tu32!(alpha), >>))
+                as usize][a as usize];
             d.rgba.b = DIV8_TABLE[(sh8!(tu32!(d.rgba.b) * tu32!(zeta), >>)
-                                      + sh8!(tu32!(s.rgba.b) * tu32!(alpha), >>))
-                                      as usize][a as usize];
+                + sh8!(tu32!(s.rgba.b) * tu32!(alpha), >>))
+                as usize][a as usize];
             d.rgba.a = a;
         }
     }
     return;
+}
+
+mod draw_buffer {
+    use super::*;
+
+    pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut s: Rect) {
+        clip_rect_offset(&mut s, &mut x, &mut y, &mut b.clip);
+        if s.w <= 0 || s.h <= 0 {
+            return;
+        }
+        let mut dst_ptr = b.pixels.as_mut_ptr();
+        let src_ptr = src.pixels.as_ptr();
+        for iy in 0..(s.h as usize) {
+            unsafe {
+                let mut pd = dst_ptr.offset((x + (y + iy as i32) * b.w) as isize);
+                let ps = src_ptr.offset((s.x + (s.y + iy as i32) * src.w) as isize);
+                let (mut d_off, mut s_off) = (0, 0);
+                for _ in (s.w as usize)..0 {
+                    blend_pixel(&b.mode, &mut *(pd.offset(d_off)), *(ps.offset(s_off)));
+                    d_off += 1;
+                    s_off += 1;
+                }
+            }
+        }
+    }
+
+    pub fn scaled(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut s: Rect, a: Transform) {
+        
+    }
+
+}
+
+#[cfg(feature = "MODE_RGBA")]
+const RGB_MASK: u32 = 0xffffff;
+#[cfg(feature = "MODE_ARGB")]
+const RGB_MASK: u32 = 0xffffff00;
+#[cfg(feature = "MODE_ABGR")]
+const RGB_MASK: u32 = 0xffffff00;
+#[cfg(feature = "MODE_BGRA")]
+const RGB_MASK: u32 = 0xffffff;
+
+static mut INITED: bool = false;
+static mut DIV8_TABLE: [[u8; 256]; 256] = [[0; 256]; 256];
+
+const FX_BITS: u32 = 12;
+const FX_UNIT: u32 = 1 << FX_BITS;
+const FX_MASK: u32 = FX_UNIT - 1;
+
+fn init_8bit() {
+    unsafe {
+        if INITED {
+            return;
+        }
+        for b in 1..256 {
+            for (a, t) in DIV8_TABLE.iter_mut().enumerate().take(256).skip(1) {
+                t[b] = ((a << 8) / b) as u8;
+            }
+        }
+        INITED = true;
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -484,7 +458,6 @@ impl Transform {
     }
 }
 
-// #[derive(Debug, Copy, Clone)]
 #[derive(Debug, Clone)]
 pub struct Buffer {
     pub mode: DrawMode,
@@ -655,12 +628,12 @@ impl Buffer {
         }
     }
 
-    pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
-        let px = self.get_pixel(x, y);
-        __flood_fill(self, c, px, x, y);
-    }
+//    overflows the stack
+//    pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
+//        let px = self.get_pixel(x, y);
+//        flood_fill(self, c, px, x, y);
+//    }
 
-    // void sr_drawPixel(sr_Buffer *b, sr_Pixel c, int x, int y);
     pub fn draw_pixel(&mut self, c: Pixel, x: i32, y: i32) {
         if x >= self.clip.x && x < self.clip.x + self.clip.w && y >= self.clip.y
             && y < self.clip.y + self.clip.h
@@ -669,7 +642,6 @@ impl Buffer {
         }
     }
 
-    // void sr_drawLine(sr_Buffer *b, sr_Pixel c, int x0, int y0, int x1, int y1);
     pub fn draw_line(&mut self, c: Pixel, mut x0: i32, mut y0: i32, mut x1: i32, mut y1: i32) {
         let steep: bool = {
             let v0 = ((y1 as i32) - (y0 as i32)).abs();
@@ -706,7 +678,6 @@ impl Buffer {
         }
     }
 
-    // void sr_drawRect(sr_Buffer *b, sr_Pixel c, int x, int y, int w, int h);
     pub fn draw_rect(&mut self, c: Pixel, mut x: i32, mut y: i32, w: i32, h: i32) {
         let mut r = Rect::new(x, y, w, h);
         clip_rect(&mut r, &self.clip);
@@ -724,7 +695,6 @@ impl Buffer {
         }
     }
 
-    // void sr_drawBox(sr_Buffer *b, sr_Pixel c, int x, int y, int w, int h);
     pub fn draw_box(&mut self, c: Pixel, mut x: i32, mut y: i32, w: i32, h: i32) {
         self.draw_rect(c, x + 1, y, w - 1, 1);
         self.draw_rect(c, x, y + h - 1, w - 1, 1);
@@ -732,7 +702,6 @@ impl Buffer {
         self.draw_rect(c, x + w - 1, y + 1, 1, h - 1);
     }
 
-    // void sr_drawCircle(sr_Buffer *b, sr_Pixel c, int x, int y, int r);
     pub fn draw_circle(&mut self, c: Pixel, x: i32, y: i32, radius: i32) {
         let mut dx = radius.abs();
         let mut dy = 0;
@@ -758,7 +727,6 @@ impl Buffer {
         }
     }
 
-    // void sr_drawRing(sr_Buffer *b, sr_Pixel c, int x, int y, int r);
     pub fn draw_ring(&mut self, c: Pixel, x: i32, y: i32, radius: i32) {
         let mut dx = radius.abs();
         let mut dy = 0;
@@ -768,7 +736,7 @@ impl Buffer {
         {
             return;
         }
-        while (dx >= dy) {
+        while dx >= dy {
             self.draw_pixel(c, dx + x, dy + y);
             self.draw_pixel(c, dy + x, dx + y);
             self.draw_pixel(c, -dx + x, dy + y);
@@ -787,7 +755,28 @@ impl Buffer {
         }
     }
 
-    // void sr_drawBuffer(sr_Buffer *b, sr_Buffer *src, int x, int y, sr_Rect *sub, sr_Transform *t);
+    pub fn draw(&mut self, src: &Buffer, x: i32, y: i32, sub: Option<Rect>, t: Option<Transform>) {
+        let s = match sub {
+            Some(s) => {
+                if s.w <= 0 || s.h <= 0 {
+                    return;
+                } else {
+                    if !(s.x >= 0 && s.y >= 0 && s.x + s.w <= src.w && s.y + s.h <= src.h) {
+                        panic!("sub rectangle out of bounds");
+                    } else {
+                        s
+                    }
+                }
+            }
+            None => Rect::new(0, 0, src.w, src.h),
+        };
+        match t {
+            None => draw_buffer::basic(self, src, x, y, s),
+            Some(t) => {
+
+            }
+        }
+    }
 }
 
 struct Point {
@@ -832,11 +821,11 @@ mod tests {
         b.noise(54535957, 0, 255, false);
     }
 
-    #[test]
-    fn flood_fill() {
-        let mut b = Buffer::new(512, 512);
-        b.flood_fill(Pixel::color(0, 0, 0), 0,0);
-    }
+//    #[test]
+//    fn flood_fill() {
+//        let mut b = Buffer::new(512, 512);
+//        b.flood_fill(Pixel::color(0, 0, 0), 0, 0);
+//    }
 
     #[test]
     fn draw_pixel() {
@@ -874,11 +863,8 @@ mod tests {
         b.draw_ring(Pixel::color(255, 0, 255), 0, 0, 255);
     }
 
-
 }
 
 fn main() {
     println!("HELLO WORLD");
-    let mut b = Buffer::new(512, 512);
-    b.flood_fill(Pixel::color(0,0,0),0,0);
 }
