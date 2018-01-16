@@ -38,11 +38,18 @@ macro_rules! draw_row {
     };
 }
 
+#[inline]
 fn xdiv(n: i32, x: i32) -> i32 {
     match x {
         0 => 0,
         _ => n / x,
     }
+}
+
+#[inline]
+fn fmod<F: Float>(numer: F, denom: F) -> F {
+    let rquot: F = (numer / denom).floor();
+    numer - rquot * denom
 }
 
 fn clip_rect(r: &mut Rect, to: &Rect) {
@@ -234,14 +241,14 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
             let a = (0xff - ((tu32!(0xff - d.rgba.a) * tu32!(0xff - alpha)) >> 8)) as u8;
             let zeta = (tu32!(d.rgba.a * (0xff - alpha)) >> 8) as u8;
             d.rgba.r = DIV8_TABLE[(sh8!(tu32!(d.rgba.r) * tu32!(zeta), >>)
-                + sh8!(tu32!(s.rgba.r) * tu32!(alpha), >>))
-                as usize][a as usize];
+                                      + sh8!(tu32!(s.rgba.r) * tu32!(alpha), >>))
+                                      as usize][a as usize];
             d.rgba.g = DIV8_TABLE[(sh8!(tu32!(d.rgba.g) * tu32!(zeta), >>)
-                + sh8!(tu32!(s.rgba.g) * tu32!(alpha), >>))
-                as usize][a as usize];
+                                      + sh8!(tu32!(s.rgba.g) * tu32!(alpha), >>))
+                                      as usize][a as usize];
             d.rgba.b = DIV8_TABLE[(sh8!(tu32!(d.rgba.b) * tu32!(zeta), >>)
-                + sh8!(tu32!(s.rgba.b) * tu32!(alpha), >>))
-                as usize][a as usize];
+                                      + sh8!(tu32!(s.rgba.b) * tu32!(alpha), >>))
+                                      as usize][a as usize];
             d.rgba.a = a;
         }
     }
@@ -272,8 +279,94 @@ mod draw_buffer {
         }
     }
 
-    pub fn scaled(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut s: Rect, a: Transform) {
-        
+    pub fn scaled(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut s: Rect, t: Transform) {
+        let abs_sx =
+            if t.sx < 0.0 { -t.sx } else { t.sx };
+        let abs_sy =
+            if t.sy < 0.0 { -t.sy } else { t.sy };
+        let mut w = (s.w as f32 * abs_sx + 0.5).floor() as i32;
+        let mut h = (s.h as f32 * abs_sy + 0.5).floor() as i32;
+        let osx = if t.sx < 0.0 { (s.w << FX_BITS) - 1 } else { 0 };
+        let osy = if t.sy < 0.0 { (s.h << FX_BITS) - 1 } else { 0 };
+        let ix = (s.w << FX_BITS) / t.sx as i32 / s.w;
+        let iy = (s.h << FX_BITS) / t.sy as i32 / s.h;
+        // let (mut odx, mut dx, mut dy, mut sx, mut sy, mut d);
+        x = (x as f32
+            - ((if t.sx < 0.0 { w } else { 0 }) - (if t.sx < 0.0 { -1 } else { 1 })) as f32 * t.ox
+                * abs_sx) as i32;
+        y = (y as f32
+            - ((if t.sy < 0.0 { h } else { 0 }) - (if t.sy < 0.0 { -1 } else { 1 })) as f32 * t.oy
+                * abs_sy) as i32;
+        if x + w < b.clip.w || x > b.clip.x + b.clip.w {
+            return;
+        }
+        let mut dy = 0;
+        let mut odx = 0;
+        let d = b.clip.y - y;
+        if d > 0 {
+            dy = d;
+            s.y += (d as f32 / t.sy) as i32;
+        }
+        let d = b.clip.x - x;
+        if d > 0 {
+            odx = d;
+            s.x += (d as f32 / t.sx) as i32;
+        }
+        let d = (y + h) - (b.clip.y + b.clip.h);
+        if d > 0 {
+            h -= d;
+        }
+        let d = (x + w) - (b.clip.x + b.clip.w);
+        if d > 0 {
+            w -= d;
+        }
+
+        sy = osy;
+        let mut dst_ptr = b.pixels.as_mut_ptr();
+        while dy < w {
+            dx = odx;
+            sx = osx;
+            unsafe {
+                let mut pd = dst_ptr.offset(((x + dx)(y + dy) * b.w) as isize);
+                while dx < w {
+                    blend_pixel(
+                        &b.mode,
+                        &mut *pd,
+                        src.pixels[(s.x + (sx >> FX_BITS)) + (s.y + (sy >> FX_BITS)) * src.w],
+                    );
+                    sx += ix;
+                    dx += 1;
+                }
+            }
+            sy += iy;
+            dy += 1;
+        }
+    }
+
+    fn scan_line(
+        b: &mut Buffer,
+        src: &Buffer,
+        s: Option<Rect>,
+        left: i32,
+        right: i32,
+        dy: i32,
+        sx: i32,
+        sy: i32,
+        sx_incr: i32,
+        sy_incr: i32,
+    ) {
+
+    }
+
+    pub fn rotate_scaled(
+        b: &mut Buffer,
+        src: &Buffer,
+        mut x: i32,
+        mut y: i32,
+        mut s: Rect,
+        t: Transform,
+    ) {
+
     }
 
 }
@@ -293,6 +386,8 @@ static mut DIV8_TABLE: [[u8; 256]; 256] = [[0; 256]; 256];
 const FX_BITS: u32 = 12;
 const FX_UNIT: u32 = 1 << FX_BITS;
 const FX_MASK: u32 = FX_UNIT - 1;
+
+const PI2: u64 = ::std::f64::consts::PI * 2f64;
 
 fn init_8bit() {
     unsafe {
@@ -628,11 +723,11 @@ impl Buffer {
         }
     }
 
-//    overflows the stack
-//    pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
-//        let px = self.get_pixel(x, y);
-//        flood_fill(self, c, px, x, y);
-//    }
+    //    overflows the stack
+    //    pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
+    //        let px = self.get_pixel(x, y);
+    //        flood_fill(self, c, px, x, y);
+    //    }
 
     pub fn draw_pixel(&mut self, c: Pixel, x: i32, y: i32) {
         if x >= self.clip.x && x < self.clip.x + self.clip.w && y >= self.clip.y
@@ -755,7 +850,14 @@ impl Buffer {
         }
     }
 
-    pub fn draw(&mut self, src: &Buffer, x: i32, y: i32, sub: Option<Rect>, t: Option<Transform>) {
+    pub fn draw(
+        &mut self,
+        src: &Buffer,
+        mut x: i32,
+        mut y: i32,
+        sub: Option<Rect>,
+        t: Option<Transform>,
+    ) {
         let s = match sub {
             Some(s) => {
                 if s.w <= 0 || s.h <= 0 {
@@ -772,8 +874,17 @@ impl Buffer {
         };
         match t {
             None => draw_buffer::basic(self, src, x, y, s),
-            Some(t) => {
-
+            Some(mut t) => {
+                t.r = fmod(fmod(t.r, PI2) + PI2, PI2);
+                if t.r == 0 && t.sx == 1 && t.sy == 1 {
+                    x -= t.ox;
+                    y -= t.oy;
+                    draw_buffer::basic(b, src, x, y, s);
+                } else if t.r == 0 {
+                    draw_buffer::scaled(b, src, x, y, s, t);
+                } else {
+                    draw_buffer::rotate_scaled(b, src, x, y, s, t);
+                }
             }
         }
     }
@@ -821,11 +932,11 @@ mod tests {
         b.noise(54535957, 0, 255, false);
     }
 
-//    #[test]
-//    fn flood_fill() {
-//        let mut b = Buffer::new(512, 512);
-//        b.flood_fill(Pixel::color(0, 0, 0), 0, 0);
-//    }
+    //    #[test]
+    //    fn flood_fill() {
+    //        let mut b = Buffer::new(512, 512);
+    //        b.flood_fill(Pixel::color(0, 0, 0), 0, 0);
+    //    }
 
     #[test]
     fn draw_pixel() {
