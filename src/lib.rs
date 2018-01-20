@@ -1,10 +1,7 @@
-use std::{fmt, mem, f32};
+#![allow(dead_code, unused_variables, unused_mut)]
 
-//macro_rules! clamp {
-//  ($x:expr, $a:expr, $b:expr) => {
-//      $x.min($b).max($a)
-//  };
-//}
+use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::{fmt, mem, f32};
 
 macro_rules! lerp {
   ($bits:expr, $a:expr, $b:expr, $p:expr) => {
@@ -38,8 +35,63 @@ macro_rules! draw_row {
     };
 }
 
+macro_rules! impl_add {
+    ($type: ident, $add: expr) => {
+        impl Add<$type> for $type {
+            type Output = $type;
+            fn add(self, rhs: $type) -> $type {
+                $add(self, rhs)
+            }
+        }
+    }
+}
+
+macro_rules! impl_sub {
+    ($type: ident, $sub: expr) => {
+        impl Sub<$type> for $type {
+            type Output = $type;
+            fn sub(self, rhs: $type) -> $type {
+                $sub(self, rhs)
+            }
+        }
+    }
+}
+
+macro_rules! impl_mul {
+    ($type: ident, $mul: expr) => {
+        impl Mul<$type> for $type {
+            type Output = $type;
+            fn mul(self, rhs: $type) -> $type {
+                $mul(self, rhs)
+            }
+        }
+    }
+}
+
+macro_rules! impl_div {
+    ($type: ident, $div: expr) => {
+        impl Div<$type> for $type {
+            type Output = $type;
+            fn div(self, rhs: $type) -> $type {
+                $div(self, rhs)
+            }
+        }
+    }
+}
+
+macro_rules! impl_neg {
+    ($type: ident, $neg: expr) => {
+        impl Neg for $type {
+            type Output = $type;
+            fn neg(self) -> $type {
+                $neg(self)
+            }
+        }
+    }
+}
+
 #[inline]
-fn xdiv(n: i32, x: i32) -> i32 {
+fn xdiv_i32(n: i32, x: i32) -> i32 {
     match x {
         0 => 0,
         _ => n / x,
@@ -47,9 +99,20 @@ fn xdiv(n: i32, x: i32) -> i32 {
 }
 
 #[inline]
-fn fmod<F: Float>(numer: F, denom: F) -> F {
-    let rquot: F = (numer / denom).floor();
-    numer - rquot * denom
+fn xdiv_u32(n: u32, x: u32) -> u32 {
+    match x {
+        0 => 0,
+        _ => n / x,
+    }
+}
+
+#[inline]
+fn xdiv_f32(n: f32, x: f32) -> f32 {
+    if x == 0f32 {
+        0f32
+    } else {
+        n / x
+    }
 }
 
 fn clip_rect(r: &mut Rect, to: &Rect) {
@@ -263,7 +326,7 @@ mod draw_buffer {
         if s.w <= 0 || s.h <= 0 {
             return;
         }
-        let mut dst_ptr = b.pixels.as_mut_ptr();
+        let dst_ptr = b.pixels.as_mut_ptr();
         let src_ptr = src.pixels.as_ptr();
         for iy in 0..(s.h as usize) {
             unsafe {
@@ -321,18 +384,19 @@ mod draw_buffer {
             w -= d;
         }
 
-        sy = osy;
-        let mut dst_ptr = b.pixels.as_mut_ptr();
-        while dy < w {
-            dx = odx;
-            sx = osx;
+        let mut sy = osy;
+        let dst_ptr = b.pixels.as_mut_ptr();
+        while dy < h {
+            let mut dx = odx;
+            let mut sx = osx;
             unsafe {
-                let mut pd = dst_ptr.offset(((x + dx)(y + dy) * b.w) as isize);
+                let pd = dst_ptr.offset(((x + dx) + (y + dy) * b.w) as isize);
                 while dx < w {
                     blend_pixel(
                         &b.mode,
                         &mut *pd,
-                        src.pixels[(s.x + (sx >> FX_BITS)) + (s.y + (sy >> FX_BITS)) * src.w],
+                        src.pixels
+                            [((s.x + (sx >> FX_BITS)) + (s.y + (sy >> FX_BITS)) * src.w) as usize],
                     );
                     sx += ix;
                     dx += 1;
@@ -346,16 +410,69 @@ mod draw_buffer {
     fn scan_line(
         b: &mut Buffer,
         src: &Buffer,
-        s: Option<Rect>,
-        left: i32,
-        right: i32,
+        s: &Rect,
+        mut left: i32,
+        mut right: i32,
         dy: i32,
-        sx: i32,
-        sy: i32,
+        mut sx: i32,
+        mut sy: i32,
         sx_incr: i32,
         sy_incr: i32,
     ) {
-
+        if dy < b.clip.y || dy >= b.clip.y + b.clip.h {
+            return;
+        }
+        let d = b.clip.x - left;
+        if d > 0 {
+            left += d;
+            sx += d * sx_incr;
+            sy += d * sy_incr;
+        }
+        let d = right - (b.clip.x + b.clip.w);
+        if d > 0 {
+            right -= d;
+        }
+        let (mut dx, mut x, mut y);
+        'checkSourceLeft: loop {
+            x = sx >> FX_BITS;
+            y = sy >> FX_BITS;
+            if x < s.x || y < s.y || x >= s.x + s.w || y >= s.y + s.h {
+                left += 1;
+                sx += sx_incr;
+                sy += sy_incr;
+                if left >= right {
+                    return;
+                }
+            } else {
+                break 'checkSourceLeft;
+            }
+        }
+        'checkSourceRight: loop {
+            x = (sx + sx_incr * (right - left)) >> FX_BITS;
+            y = (sy + sy_incr * (right - left)) >> FX_BITS;
+            if x < s.x || y < s.y || x >= s.x + s.w || y >= s.y + s.h {
+                right -= 1;
+                if left >= right {
+                    return;
+                }
+            } else {
+                break 'checkSourceRight;
+            }
+        }
+        dx = left;
+        let b_ptr = b.pixels.as_mut_ptr();
+        while dx < right {
+            unsafe {
+                blend_pixel(
+                    &b.mode,
+                    &mut (*b_ptr.offset((dx + dy * b.w) as isize)),
+                    src.pixels[((sx >> FX_BITS) + (sy >> FX_BITS) * src.w) as usize],
+                );
+            }
+            sx += sx_incr;
+            sy += sy_incr;
+            dx += 1;
+        }
     }
 
     pub fn rotate_scaled(
@@ -366,7 +483,8 @@ mod draw_buffer {
         mut s: Rect,
         t: Transform,
     ) {
-
+        let mut p: [Point; 4];
+        // let (mut top, mut bottom, mut left, mut right);
     }
 
 }
@@ -377,7 +495,10 @@ const RGB_MASK: u32 = 0xffffff;
 const RGB_MASK: u32 = 0xffffff00;
 #[cfg(feature = "MODE_ABGR")]
 const RGB_MASK: u32 = 0xffffff00;
-#[cfg(feature = "MODE_BGRA")]
+
+#[cfg(any(feature = "MODE_BGRA",
+          all(not(feature = "MODE_RGBA"), not(feature = "MODE_ARGB"),
+              not(feature = "MODE_ABGR"))))]
 const RGB_MASK: u32 = 0xffffff;
 
 static mut INITED: bool = false;
@@ -385,9 +506,9 @@ static mut DIV8_TABLE: [[u8; 256]; 256] = [[0; 256]; 256];
 
 const FX_BITS: u32 = 12;
 const FX_UNIT: u32 = 1 << FX_BITS;
-const FX_MASK: u32 = FX_UNIT - 1;
+// const FX_MASK: u32 = FX_UNIT - 1;
 
-const PI2: u64 = ::std::f64::consts::PI * 2f64;
+const PI2: f32 = ::std::f32::consts::PI * 2f32;
 
 fn init_8bit() {
     unsafe {
@@ -403,7 +524,7 @@ fn init_8bit() {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PixelFormat {
     BGRA,
     RGBA,
@@ -411,7 +532,7 @@ pub enum PixelFormat {
     ABGR,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BlendMode {
     ALPHA,
     COLOR,
@@ -425,7 +546,7 @@ pub enum BlendMode {
 }
 
 #[cfg(feature = "MODE_RGBA")]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Channel {
     pub r: u8,
     pub g: u8,
@@ -433,7 +554,7 @@ pub struct Channel {
     pub a: u8,
 }
 #[cfg(feature = "MODE_ARGB")]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Channel {
     pub a: u8,
     pub r: u8,
@@ -441,15 +562,17 @@ pub struct Channel {
     pub b: u8,
 }
 #[cfg(feature = "MODE_ABGR")]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Channel {
     pub a: u8,
     pub b: u8,
     pub g: u8,
     pub r: u8,
 }
-#[cfg(feature = "MODE_BGRA")]
-#[derive(Debug, Copy, Clone)]
+#[cfg(any(feature = "MODE_BGRA",
+          all(not(feature = "MODE_RGBA"), not(feature = "MODE_ARGB"),
+              not(feature = "MODE_ABGR"))))]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Channel {
     pub b: u8,
     pub g: u8,
@@ -462,6 +585,54 @@ impl Channel {
         Channel { r, g, b, a }
     }
 }
+
+impl_add!(Channel, |s: Channel, rhs: Channel| -> Channel {
+    Channel {
+        r: s.r.wrapping_add(rhs.r),
+        g: s.g.wrapping_add(rhs.g),
+        b: s.b.wrapping_add(rhs.b),
+        a: s.a.wrapping_add(rhs.a),
+    }
+});
+
+impl_sub!(Channel, |s: Channel, rhs: Channel| -> Channel {
+    Channel {
+        r: s.r.wrapping_sub(rhs.r),
+        g: s.g.wrapping_sub(rhs.g),
+        b: s.b.wrapping_sub(rhs.b),
+        a: s.a.wrapping_sub(rhs.a),
+    }
+});
+
+impl_mul!(Channel, |s: Channel, rhs: Channel| -> Channel {
+    Channel {
+        r: s.r.wrapping_mul(rhs.r),
+        g: s.g.wrapping_mul(rhs.g),
+        b: s.b.wrapping_mul(rhs.b),
+        a: s.a.wrapping_mul(rhs.a),
+    }
+});
+
+impl_div!(Channel, |s: Channel, rhs: Channel| -> Channel {
+    Channel {
+        r: match rhs.r {
+            0 => 0,
+            _ => s.r.wrapping_div(rhs.r),
+        },
+        g: match rhs.g {
+            0 => 0,
+            _ => s.g.wrapping_div(rhs.g),
+        },
+        b: match rhs.b {
+            0 => 0,
+            _ => s.b.wrapping_div(rhs.b),
+        },
+        a: match rhs.a {
+            0 => 0,
+            _ => s.a.wrapping_div(rhs.a),
+        },
+    }
+});
 
 #[derive(Clone, Copy)]
 pub union Pixel {
@@ -507,7 +678,39 @@ impl fmt::Debug for Pixel {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+impl_add!(Pixel, |s: Pixel, rhs: Pixel| -> Pixel {
+    unsafe {
+        Pixel {
+            rgba: s.rgba + rhs.rgba,
+        }
+    }
+});
+
+impl_sub!(Pixel, |s: Pixel, rhs: Pixel| -> Pixel {
+    unsafe {
+        Pixel {
+            rgba: s.rgba - rhs.rgba,
+        }
+    }
+});
+
+impl_mul!(Pixel, |s: Pixel, rhs: Pixel| -> Pixel {
+    unsafe {
+        Pixel {
+            rgba: s.rgba * rhs.rgba,
+        }
+    }
+});
+
+impl_div!(Pixel, |s: Pixel, rhs: Pixel| -> Pixel {
+    unsafe {
+        Pixel {
+            rgba: s.rgba / rhs.rgba,
+        }
+    }
+});
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Rect {
     pub x: i32,
     pub y: i32,
@@ -521,7 +724,52 @@ impl Rect {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+impl_add!(Rect, |s: Rect, rhs: Rect| -> Rect {
+    Rect {
+        x: s.x + rhs.x,
+        y: s.y + rhs.y,
+        w: s.w + rhs.w,
+        h: s.h + rhs.h,
+    }
+});
+
+impl_sub!(Rect, |s: Rect, rhs: Rect| -> Rect {
+    Rect {
+        x: s.x - rhs.x,
+        y: s.y - rhs.y,
+        w: s.w - rhs.w,
+        h: s.h - rhs.h,
+    }
+});
+
+impl_mul!(Rect, |s: Rect, rhs: Rect| -> Rect {
+    Rect {
+        x: s.x * rhs.x,
+        y: s.y * rhs.y,
+        w: s.w * rhs.w,
+        h: s.h * rhs.h,
+    }
+});
+
+impl_div!(Rect, |s: Rect, rhs: Rect| -> Rect {
+    Rect {
+        x: xdiv_i32(s.x, rhs.x),
+        y: xdiv_i32(s.y, rhs.y),
+        w: xdiv_i32(s.w, rhs.w),
+        h: xdiv_i32(s.h, rhs.h),
+    }
+});
+
+impl_neg!(Rect, |s: Rect| -> Rect {
+    Rect {
+        x: -s.x,
+        y: -s.y,
+        w: -s.w,
+        h: -s.h,
+    }
+});
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DrawMode {
     pub color: Pixel,
     pub blend: BlendMode,
@@ -538,7 +786,7 @@ impl DrawMode {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Transform {
     pub ox: f32,
     pub oy: f32,
@@ -553,7 +801,57 @@ impl Transform {
     }
 }
 
-#[derive(Debug, Clone)]
+impl_add!(Transform, |s: Transform, rhs: Transform| -> Transform {
+    Transform {
+        ox: s.ox + rhs.ox,
+        oy: s.oy + rhs.oy,
+        r: s.r + rhs.r,
+        sx: s.sx + rhs.sx,
+        sy: s.sy + rhs.sy,
+    }
+});
+
+impl_sub!(Transform, |s: Transform, rhs: Transform| -> Transform {
+    Transform {
+        ox: s.ox - rhs.ox,
+        oy: s.oy - rhs.oy,
+        r: s.r - rhs.r,
+        sx: s.sx - rhs.sx,
+        sy: s.sy - rhs.sy,
+    }
+});
+
+impl_mul!(Transform, |s: Transform, rhs: Transform| -> Transform {
+    Transform {
+        ox: s.ox * rhs.ox,
+        oy: s.oy * rhs.oy,
+        r: s.r * rhs.r,
+        sx: s.sx * rhs.sx,
+        sy: s.sy * rhs.sy,
+    }
+});
+
+impl_div!(Transform, |s: Transform, rhs: Transform| -> Transform {
+    Transform {
+        ox: xdiv_f32(s.ox, rhs.ox),
+        oy: xdiv_f32(s.oy, rhs.oy),
+        r: xdiv_f32(s.r, rhs.r),
+        sx: xdiv_f32(s.sx, rhs.sy),
+        sy: xdiv_f32(s.sy, rhs.sx),
+    }
+});
+
+impl_neg!(Transform, |s: Transform| -> Transform {
+    Transform {
+        ox: -s.ox,
+        oy: -s.oy,
+        r: -s.r,
+        sx: -s.sx,
+        sy: -s.sy,
+    }
+});
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Buffer {
     pub mode: DrawMode,
     pub clip: Rect,
@@ -875,25 +1173,62 @@ impl Buffer {
         match t {
             None => draw_buffer::basic(self, src, x, y, s),
             Some(mut t) => {
-                t.r = fmod(fmod(t.r, PI2) + PI2, PI2);
-                if t.r == 0 && t.sx == 1 && t.sy == 1 {
-                    x -= t.ox;
-                    y -= t.oy;
-                    draw_buffer::basic(b, src, x, y, s);
-                } else if t.r == 0 {
-                    draw_buffer::scaled(b, src, x, y, s, t);
+                t.r = ((t.r % PI2) + PI2) % PI2;
+                if t.r == 0f32 && t.sx == 1f32 && t.sy == 1f32 {
+                    x -= t.ox as i32;
+                    y -= t.oy as i32;
+                    draw_buffer::basic(self, src, x, y, s);
+                } else if t.r == 0f32 {
+                    draw_buffer::scaled(self, src, x, y, s, t);
                 } else {
-                    draw_buffer::rotate_scaled(b, src, x, y, s, t);
+                    draw_buffer::rotate_scaled(self, src, x, y, s, t);
                 }
             }
         }
     }
 }
 
+#[derive(PartialEq)]
 struct Point {
     x: i32,
     y: i32,
 }
+
+// impl Point {
+//     pub fn new(x: i32, y: i32) -> Self {
+//         Point { x, y }
+//     }
+// }
+
+impl_add!(Point, |s: Point, rhs: Point| -> Point {
+    Point {
+        x: s.x + rhs.x,
+        y: s.y + rhs.y,
+    }
+});
+
+impl_sub!(Point, |s: Point, rhs: Point| -> Point {
+    Point {
+        x: s.x - rhs.x,
+        y: s.y - rhs.y,
+    }
+});
+
+impl_mul!(Point, |s: Point, rhs: Point| -> Point {
+    Point {
+        x: s.x * rhs.x,
+        y: s.y * rhs.y,
+    }
+});
+
+impl_div!(Point, |s: Point, rhs: Point| -> Point {
+    Point {
+        x: xdiv_i32(s.x, rhs.y),
+        y: xdiv_i32(s.y, rhs.y),
+    }
+});
+
+impl_neg!(Point, |s: Point| -> Point { Point { x: -s.x, y: -s.y } });
 
 struct RandState {
     x: u32,
