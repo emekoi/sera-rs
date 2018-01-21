@@ -63,44 +63,44 @@ fn draw_buffer_basic(buf: &mut Buffer) {
 }
 
 fn draw_buffer_scaled(buf: &mut Buffer) {
-    let mut b = Buffer::new(256, 256);
+    let mut b = Buffer::new(128, 128);
     let mut rng = rand::thread_rng();
     let d = (512 / 2) - (255 / 2);
     b.noise(rng.gen::<u32>(), 0, 255, true);
-    b.draw_line(Pixel::color(255, 0, 255), 512, 512, 0, 0);
+    b.draw_line(Pixel::color(255, 0, 255), 128, 128, 0, 0);
     b.draw_rect(Pixel::color(0, 255, 255), 0, 0, 64, 64);
-    b.draw_box(Pixel::color(255, 255, 255), 0, 0, 255, 255);
+    b.draw_box(Pixel::color(255, 255, 255), 0, 0, 128, 128);
     b.draw_circle(Pixel::color(255, 255, 0), d, d, 16);
     b.draw_ring(Pixel::color(255, 0, 255), d, d, 96);
-    b.draw_pixel(Pixel::color(255, 255, 255), 255, 255);
+    b.draw_pixel(Pixel::color(255, 255, 255), 128, 128);
 
     buf.draw(
         &b,
         0,
         0,
         None,
-        Some(Transform::new(0.0, 0.0, 0.0, 2.0, 2.0)),
+        Some(Transform::new(0.0, 0.0, 0.0, 4.0, 4.0)),
     );
 }
 
 fn draw_buffer_rotate_scaled(buf: &mut Buffer) {
-    let mut b = Buffer::new(256, 256);
+    let mut b = Buffer::new(128, 128);
     let mut rng = rand::thread_rng();
     let d = (512 / 2) - (255 / 2);
     b.noise(rng.gen::<u32>(), 0, 255, true);
-    b.draw_line(Pixel::color(255, 0, 255), 512, 512, 0, 0);
+    b.draw_line(Pixel::color(255, 0, 255), 128, 128, 0, 0);
     b.draw_rect(Pixel::color(0, 255, 255), 0, 0, 64, 64);
-    b.draw_box(Pixel::color(255, 255, 255), 0, 0, 255, 255);
+    b.draw_box(Pixel::color(255, 255, 255), 0, 0, 128, 128);
     b.draw_circle(Pixel::color(255, 255, 0), d, d, 16);
     b.draw_ring(Pixel::color(255, 0, 255), d, d, 96);
-    b.draw_pixel(Pixel::color(255, 255, 255), 255, 255);
+    b.draw_pixel(Pixel::color(255, 255, 255), 128, 128);
 
     buf.draw(
         &b,
         0,
         0,
         None,
-        Some(Transform::new(0.0, 0.0, 8.0, 2.0, 2.0)),
+        Some(Transform::new(0.0, 0.0, 8.0, 4.0, 4.0)),
     );
 }
 
@@ -118,11 +118,11 @@ pub fn as_bytes<T: Copy>(array: &[T]) -> &mut [u8] {
 fn draw_test() {
     let ctx = sdl2::init().unwrap();
     let sys = ctx.video().unwrap();
-    let win: Window = sys.window("draw-test", 512 as u32, 512 as u32)
+    let win: Window = sys.window("draw-test", 512u32, 512u32)
         .position_centered()
         .build()
         .unwrap();
-    let mut buffer = Buffer::new(512 as i32, 512 as i32);
+    let mut buffer = Buffer::new(512i32, 512i32);
     buffer.set_alpha(255);
 
     let mut event_pump = ctx.event_pump().unwrap();

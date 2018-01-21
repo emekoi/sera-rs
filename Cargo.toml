@@ -3,9 +3,6 @@ name = "sera"
 version = "0.1.0"
 authors = ["emekoi <emekankurumeh@outlook.com>"]
 
-[dependencies]
-log = "0.4"
-
 [dev-dependencies]
 rand = "*"
 sdl2 = "*"

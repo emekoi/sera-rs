@@ -1,9 +1,6 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, f32};
 
-#[macro_use]
-extern crate log;
-
 macro_rules! lerp {
   ($bits:expr, $a:expr, $b:expr, $p:expr) => {
       u32::from($a) + (((u32::from($b) - u32::from($a)) * u32::from($p)) >> $bits)
@@ -392,24 +389,19 @@ mod draw_buffer {
         if _d > 0 {
             width -= _d;
         }
-
         let mut sy = osy;
-        let dst_ptr = b.pixels.as_mut_ptr();
         while dy < height {
             let mut dx = odx;
             let mut sx = osx;
-            unsafe {
-                let pd = dst_ptr.offset(((x + dx) + (y + dy) * b.w) as isize);
-                while dx < width {
-                    blend_pixel(
-                        &b.mode,
-                        &mut *pd,
-                        src.pixels[((sub.x + (sx >> FX_BITS)) + (sub.y + (sy >> FX_BITS)) * src.w)
-                                       as usize],
-                    );
-                    sx += ix;
-                    dx += 1;
-                }
+            while dx < width {
+                blend_pixel(
+                    &b.mode,
+                    &mut b.pixels[((x + dx) + (y + dy) * b.w) as usize],
+                    src.pixels
+                        [((sub.x + (sx >> FX_BITS)) + (sub.y + (sy >> FX_BITS)) * src.w) as usize],
+                );
+                sx += ix;
+                dx += 1;
             }
             sy += iy;
             dy += 1;
@@ -470,15 +462,12 @@ mod draw_buffer {
             }
         }
         dx = left;
-        let b_ptr = b.pixels.as_mut_ptr();
         while dx < right {
-            unsafe {
-                blend_pixel(
-                    &b.mode,
-                    &mut (*b_ptr.offset((dx + dy * b.w) as isize)),
-                    src.pixels[((sx >> FX_BITS) + (sy >> FX_BITS) * src.w) as usize],
-                );
-            }
+            blend_pixel(
+                &b.mode,
+                &mut b.pixels[(dx + dy * b.w) as usize],
+                src.pixels[((sx >> FX_BITS) + (sy >> FX_BITS) * src.w) as usize],
+            );
             sx += sx_incr;
             sy += sy_incr;
             dx += 1;
@@ -690,7 +679,7 @@ pub struct Channel {
 }
 
 impl Channel {
-    fn new(r: u8, g: u8, b: u8, a: u8) -> Channel {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Channel {
         Channel { r, g, b, a }
     }
 }
@@ -828,7 +817,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    fn new(x: i32, y: i32, w: i32, h: i32) -> Rect {
+    pub fn new(x: i32, y: i32, w: i32, h: i32) -> Rect {
         Rect { x, y, w, h }
     }
 }
@@ -886,7 +875,7 @@ pub struct DrawMode {
 }
 
 impl DrawMode {
-    fn new(color: Pixel, blend: BlendMode, alpha: u8) -> DrawMode {
+    pub fn new(color: Pixel, blend: BlendMode, alpha: u8) -> DrawMode {
         DrawMode {
             color,
             blend,
@@ -1308,7 +1297,7 @@ struct Point {
 }
 
 impl Point {
-    pub fn new(x: i32, y: i32) -> Self {
+    fn new(x: i32, y: i32) -> Self {
         Point { x, y }
     }
 }
