@@ -1,6 +1,9 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, f32};
 
+#[macro_use]
+extern crate log;
+
 macro_rules! lerp {
   ($bits:expr, $a:expr, $b:expr, $p:expr) => {
       u32::from($a) + (((u32::from($b) - u32::from($a)) * u32::from($p)) >> $bits)
@@ -323,10 +326,12 @@ mod draw_buffer {
                 let mut pd = dst_ptr.offset((x + (y + iy as i32) * b.w) as isize);
                 let ps = src_ptr.offset((sub.x + (sub.y + iy as i32) * src.w) as isize);
                 let (mut d_off, mut s_off) = (0, 0);
-                for _ in (sub.w as usize)..0 {
+                let mut ix = sub.w;
+                while ix > 0 {
                     blend_pixel(&b.mode, &mut *(pd.offset(d_off)), *(ps.offset(s_off)));
                     d_off += 1;
                     s_off += 1;
+                    ix -= 1;
                 }
             }
         }
@@ -356,8 +361,8 @@ mod draw_buffer {
         } else {
             0
         };
-        let ix = (sub.w << FX_BITS) / t.sx as i32 / sub.w;
-        let iy = (sub.h << FX_BITS) / t.sy as i32 / sub.h;
+        let ix = ((sub.w << FX_BITS) as f32 / t.sx / sub.w as f32) as i32;
+        let iy = ((sub.h << FX_BITS) as f32 / t.sy / sub.h as f32) as i32;
         x = (x as f32
             - ((if t.sx < 0.0 { width } else { 0 }) - (if t.sx < 0.0 { -1 } else { 1 })) as f32
                 * t.ox * abs_sx) as i32;
@@ -900,7 +905,7 @@ pub struct Transform {
 }
 
 impl Transform {
-    fn new(ox: f32, oy: f32, r: f32, sx: f32, sy: f32) -> Transform {
+    pub fn new(ox: f32, oy: f32, r: f32, sx: f32, sy: f32) -> Transform {
         Transform { ox, oy, r, sx, sy }
     }
 }
@@ -1104,7 +1109,7 @@ impl Buffer {
         }
     }
 
-    pub fn noise(&mut self, seed: u32, high: u8, low: u8, grey: bool) {
+    pub fn noise(&mut self, seed: u32, low: u8, high: u8, grey: bool) {
         let mut s = RandState::new(seed);
         let low = 0xfe.min(low);
         let high = high.max(low + 1);
@@ -1362,73 +1367,5 @@ impl RandState {
         self.z = self.w;
         self.w = self.w ^ (self.w >> 19) ^ t ^ (t >> 8);
         self.w
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn noise() {
-        let mut b = Buffer::new(512, 512);
-        b.noise(54535957, 0, 255, false);
-    }
-
-    //    #[test]
-    //    fn flood_fill() {
-    //        let mut b = Buffer::new(512, 512);
-    //        b.flood_fill(Pixel::color(0, 0, 0), 0, 0);
-    //    }
-
-    #[test]
-    fn draw_pixel() {
-        let mut b = Buffer::new(512, 512);
-        b.draw_pixel(Pixel::color(255, 0, 255), 255, 255);
-    }
-
-    #[test]
-    fn draw_line() {
-        let mut b = Buffer::new(512, 512);
-        b.draw_line(Pixel::color(255, 0, 255), 255, 255, 0, 0);
-    }
-
-    #[test]
-    fn draw_rect() {
-        let mut b = Buffer::new(512, 512);
-        b.draw_rect(Pixel::color(255, 0, 255), 0, 0, 255, 255);
-    }
-
-    #[test]
-    fn draw_box() {
-        let mut b = Buffer::new(512, 512);
-        b.draw_box(Pixel::color(255, 0, 255), 0, 0, 255, 255);
-    }
-
-    #[test]
-    fn draw_circle() {
-        let mut b = Buffer::new(512, 512);
-        b.draw_circle(Pixel::color(255, 0, 255), 0, 0, 255);
-    }
-
-    #[test]
-    fn draw_ring() {
-        let mut b = Buffer::new(512, 512);
-        b.draw_ring(Pixel::color(255, 0, 255), 0, 0, 255);
-    }
-
-    #[test]
-    fn draw_buffer() {
-        let mut b = Buffer::new(256, 256);
-        let mut b1 = Buffer::new(512, 512);
-        b.draw_rect(Pixel::pixel(255, 0, 255, 126), 0, 0, 256, 256);
-        b1.draw(
-            &b,
-            0,
-            0,
-            None,
-            Some(Transform::new(0.0, 0.0, 0.0, 2.0, 2.0)),
-        );
-        assert_eq!(b1.get_pixel(511, 511), Pixel::pixel(255, 0, 255, 126));
     }
 }
