@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["emekoi <emekankurumeh@outlook.com>"]
 
 [dependencies]
+# png = "0.11.0"
 
 [features]
 default = []

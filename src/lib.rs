@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables, unused_mut)]
-
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, f32};
 
@@ -99,14 +97,6 @@ fn xdiv_i32(n: i32, x: i32) -> i32 {
 }
 
 #[inline]
-fn xdiv_u32(n: u32, x: u32) -> u32 {
-    match x {
-        0 => 0,
-        _ => n / x,
-    }
-}
-
-#[inline]
 fn xdiv_f32(n: f32, x: f32) -> f32 {
     if x == 0f32 {
         0f32
@@ -149,12 +139,12 @@ fn clip_rect_offset(r: &mut Rect, x: &mut i32, y: &mut i32, to: &mut Rect) {
     }
 }
 
-fn copy_pixel_basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut s: Rect) {
-    clip_rect_offset(&mut s, &mut x, &mut y, &mut b.clip);
-    if s.w == 0 || s.h == 0 {
+fn copy_pixel_basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
+    clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
+    if sub.w == 0 || sub.h == 0 {
         return;
     }
-    for i in 0..s.h {
+    for i in 0..sub.h {
         let b_offset = i * b.w;
         let s_offset = i * src.w;
         b.pixels[b_offset as usize..(b.w + b_offset) as usize]
@@ -167,25 +157,25 @@ fn copy_pixels_scaled(
     src: &Buffer,
     mut x: i32,
     mut y: i32,
-    mut s: Rect,
+    mut sub: Rect,
     scalex: f32,
     scaley: f32,
 ) {
-    let mut width = (s.w as f32 * scalex) as i32;
-    let mut height = (s.h as f32 * scaley) as i32;
+    let mut width = (sub.w as f32 * scalex) as i32;
+    let mut height = (sub.h as f32 * scaley) as i32;
     let inx = (FX_UNIT as f32 / scalex) as i32;
     let iny = (FX_UNIT as f32 / scaley) as i32;
 
     let delta = b.clip.x - x;
     if delta > 0 {
         x += delta;
-        s.x += (delta as f32 / scalex) as i32;
+        sub.x += (delta as f32 / scalex) as i32;
         width -= delta;
     }
     let delta = b.clip.y - y;
     if delta > 0 {
         y += delta;
-        s.y += (delta as f32 / scaley) as i32;
+        sub.y += (delta as f32 / scaley) as i32;
         height -= delta;
     }
     let delta = (x + width) - (b.clip.x + b.clip.w);
@@ -200,9 +190,9 @@ fn copy_pixels_scaled(
     if width == 0 || height == 0 {
         return;
     }
-    let mut sy = s.y << FX_BITS;
+    let mut sy = sub.y << FX_BITS;
     for dy in y..(y + height) {
-        let pixels = &src.pixels[((s.x >> FX_BITS) + src.w * (sy >> FX_BITS)) as usize..];
+        let pixels = &src.pixels[((sub.x >> FX_BITS) + src.w * (sy >> FX_BITS)) as usize..];
         let mut sx = 0;
         let mut dx = x + b.w * dy;
         let edx = dx + width;
@@ -321,19 +311,19 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
 mod draw_buffer {
     use super::*;
 
-    pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut s: Rect) {
-        clip_rect_offset(&mut s, &mut x, &mut y, &mut b.clip);
-        if s.w <= 0 || s.h <= 0 {
+    pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
+        clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
+        if sub.w <= 0 || sub.h <= 0 {
             return;
         }
         let dst_ptr = b.pixels.as_mut_ptr();
         let src_ptr = src.pixels.as_ptr();
-        for iy in 0..(s.h as usize) {
+        for iy in 0..(sub.h as usize) {
             unsafe {
                 let mut pd = dst_ptr.offset((x + (y + iy as i32) * b.w) as isize);
-                let ps = src_ptr.offset((s.x + (s.y + iy as i32) * src.w) as isize);
+                let ps = src_ptr.offset((sub.x + (sub.y + iy as i32) * src.w) as isize);
                 let (mut d_off, mut s_off) = (0, 0);
-                for _ in (s.w as usize)..0 {
+                for _ in (sub.w as usize)..0 {
                     blend_pixel(&b.mode, &mut *(pd.offset(d_off)), *(ps.offset(s_off)));
                     d_off += 1;
                     s_off += 1;
@@ -342,61 +332,75 @@ mod draw_buffer {
         }
     }
 
-    pub fn scaled(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut s: Rect, t: Transform) {
+    pub fn scaled(
+        b: &mut Buffer,
+        src: &Buffer,
+        mut x: i32,
+        mut y: i32,
+        mut sub: Rect,
+        t: Transform,
+    ) {
         let abs_sx =
             if t.sx < 0.0 { -t.sx } else { t.sx };
         let abs_sy =
             if t.sy < 0.0 { -t.sy } else { t.sy };
-        let mut w = (s.w as f32 * abs_sx + 0.5).floor() as i32;
-        let mut h = (s.h as f32 * abs_sy + 0.5).floor() as i32;
-        let osx = if t.sx < 0.0 { (s.w << FX_BITS) - 1 } else { 0 };
-        let osy = if t.sy < 0.0 { (s.h << FX_BITS) - 1 } else { 0 };
-        let ix = (s.w << FX_BITS) / t.sx as i32 / s.w;
-        let iy = (s.h << FX_BITS) / t.sy as i32 / s.h;
-        // let (mut odx, mut dx, mut dy, mut sx, mut sy, mut d);
+        let mut width = (sub.w as f32 * abs_sx + 0.5).floor() as i32;
+        let mut height = (sub.h as f32 * abs_sy + 0.5).floor() as i32;
+        let osx = if t.sx < 0.0 {
+            (sub.w << FX_BITS) - 1
+        } else {
+            0
+        };
+        let osy = if t.sy < 0.0 {
+            (sub.h << FX_BITS) - 1
+        } else {
+            0
+        };
+        let ix = (sub.w << FX_BITS) / t.sx as i32 / sub.w;
+        let iy = (sub.h << FX_BITS) / t.sy as i32 / sub.h;
         x = (x as f32
-            - ((if t.sx < 0.0 { w } else { 0 }) - (if t.sx < 0.0 { -1 } else { 1 })) as f32 * t.ox
-                * abs_sx) as i32;
+            - ((if t.sx < 0.0 { width } else { 0 }) - (if t.sx < 0.0 { -1 } else { 1 })) as f32
+                * t.ox * abs_sx) as i32;
         y = (y as f32
-            - ((if t.sy < 0.0 { h } else { 0 }) - (if t.sy < 0.0 { -1 } else { 1 })) as f32 * t.oy
-                * abs_sy) as i32;
-        if x + w < b.clip.w || x > b.clip.x + b.clip.w {
+            - ((if t.sy < 0.0 { height } else { 0 }) - (if t.sy < 0.0 { -1 } else { 1 })) as f32
+                * t.oy * abs_sy) as i32;
+        if x + width < b.clip.w || x > b.clip.x + b.clip.w {
             return;
         }
         let mut dy = 0;
         let mut odx = 0;
-        let d = b.clip.y - y;
-        if d > 0 {
-            dy = d;
-            s.y += (d as f32 / t.sy) as i32;
+        let _d = b.clip.y - y;
+        if _d > 0 {
+            dy = _d;
+            sub.y += (_d as f32 / t.sy) as i32;
         }
-        let d = b.clip.x - x;
-        if d > 0 {
-            odx = d;
-            s.x += (d as f32 / t.sx) as i32;
+        let _d = b.clip.x - x;
+        if _d > 0 {
+            odx = _d;
+            sub.x += (_d as f32 / t.sx) as i32;
         }
-        let d = (y + h) - (b.clip.y + b.clip.h);
-        if d > 0 {
-            h -= d;
+        let _d = (y + height) - (b.clip.y + b.clip.h);
+        if _d > 0 {
+            height -= _d;
         }
-        let d = (x + w) - (b.clip.x + b.clip.w);
-        if d > 0 {
-            w -= d;
+        let _d = (x + width) - (b.clip.x + b.clip.w);
+        if _d > 0 {
+            width -= _d;
         }
 
         let mut sy = osy;
         let dst_ptr = b.pixels.as_mut_ptr();
-        while dy < h {
+        while dy < height {
             let mut dx = odx;
             let mut sx = osx;
             unsafe {
                 let pd = dst_ptr.offset(((x + dx) + (y + dy) * b.w) as isize);
-                while dx < w {
+                while dx < width {
                     blend_pixel(
                         &b.mode,
                         &mut *pd,
-                        src.pixels
-                            [((s.x + (sx >> FX_BITS)) + (s.y + (sy >> FX_BITS)) * src.w) as usize],
+                        src.pixels[((sub.x + (sx >> FX_BITS)) + (sub.y + (sy >> FX_BITS)) * src.w)
+                                       as usize],
                     );
                     sx += ix;
                     dx += 1;
@@ -410,33 +414,34 @@ mod draw_buffer {
     fn scan_line(
         b: &mut Buffer,
         src: &Buffer,
-        s: &Rect,
-        mut left: i32,
-        mut right: i32,
+        sub: &Rect,
         dy: i32,
-        mut sx: i32,
-        mut sy: i32,
+        t: Transform,
         sx_incr: i32,
         sy_incr: i32,
     ) {
         if dy < b.clip.y || dy >= b.clip.y + b.clip.h {
             return;
         }
-        let d = b.clip.x - left;
-        if d > 0 {
-            left += d;
-            sx += d * sx_incr;
-            sy += d * sy_incr;
+        let mut left = t.ox as i32;
+        let mut right = t.oy as i32;
+        let mut sx = t.sx as i32;
+        let mut sy = t.sy as i32;
+        let _d = b.clip.x - left;
+        if _d > 0 {
+            left += _d;
+            sx += _d * sx_incr;
+            sy += _d * sy_incr;
         }
-        let d = right - (b.clip.x + b.clip.w);
-        if d > 0 {
-            right -= d;
+        let _d = right - (b.clip.x + b.clip.w);
+        if _d > 0 {
+            right -= _d;
         }
         let (mut dx, mut x, mut y);
         'checkSourceLeft: loop {
             x = sx >> FX_BITS;
             y = sy >> FX_BITS;
-            if x < s.x || y < s.y || x >= s.x + s.w || y >= s.y + s.h {
+            if x < sub.x || y < sub.y || x >= sub.x + sub.w || y >= sub.y + sub.h {
                 left += 1;
                 sx += sx_incr;
                 sy += sy_incr;
@@ -450,7 +455,7 @@ mod draw_buffer {
         'checkSourceRight: loop {
             x = (sx + sx_incr * (right - left)) >> FX_BITS;
             y = (sy + sy_incr * (right - left)) >> FX_BITS;
-            if x < s.x || y < s.y || x >= s.x + s.w || y >= s.y + s.h {
+            if x < sub.x || y < sub.y || x >= sub.x + sub.w || y >= sub.y + sub.h {
                 right -= 1;
                 if left >= right {
                     return;
@@ -475,22 +480,121 @@ mod draw_buffer {
         }
     }
 
-    pub fn rotate_scaled(
-        b: &mut Buffer,
-        src: &Buffer,
-        mut x: i32,
-        mut y: i32,
-        mut s: Rect,
-        t: Transform,
-    ) {
-        let mut p: [Point; 4];
-        // let (mut top, mut bottom, mut left, mut right);
+    pub fn rotate_scaled(b: &mut Buffer, src: &Buffer, x: i32, y: i32, sub: Rect, t: Transform) {
+        let mut points: [Point; 4] = [
+            Point::new(0, 0),
+            Point::new(0, 0),
+            Point::new(0, 0),
+            Point::new(0, 0),
+        ];
+        let cosr = t.r.cos();
+        let sinr = t.r.sin();
+        let abs_sx =
+            if t.sx < 0f32 { -t.sx } else { t.sx };
+        let abs_sy =
+            if t.sy < 0f32 { -t.sy } else { t.sy };
+        let inv_x = t.sx < 0f32;
+        let inv_y = t.sy < 0f32;
+        let width = sub.w * abs_sx as i32;
+        let height = sub.h * abs_sy as i32;
+        let _q = (t.r * 4f32 / PI2) as i32;
+        let cosq = (_q as f32 * PI2 / 4f32).cos();
+        let sinq = (_q as f32 * PI2 / 4f32).sin();
+        let ox = (if inv_x {
+            sub.w as f32 - t.ox
+        } else {
+            t.ox
+        }) * abs_sx;
+        let oy = (if inv_y {
+            sub.h as f32 - t.oy
+        } else {
+            t.oy
+        }) * abs_sy;
+        points[0].x = x + (cosr * (-ox) - sinr * (-oy)) as i32;
+        points[0].y = y + (sinr * (-ox) + cosr * (-oy)) as i32;
+        points[1].x = x + (cosr * (-ox + width as f32) - sinr * (-oy)) as i32;
+        points[1].y = y + (sinr * (-ox + width as f32) + cosr * (-oy)) as i32;
+        points[2].x = x + (cosr * (-ox + width as f32) - sinr * (-oy + height as f32)) as i32;
+        points[2].y = y + (sinr * (-ox + width as f32) + cosr * (-oy + height as f32)) as i32;
+        points[3].x = x + (cosr * (-ox) - sinr * (-oy + height as f32)) as i32;
+        points[3].y = y + (sinr * (-ox) + cosr * (-oy + height as f32)) as i32;
+        let top = &points[(-_q & 3) as usize];
+        let right = &points[((-_q + 1) & 3) as usize];
+        let bottom = &points[((-_q + 2) & 3) as usize];
+        let left = &points[((-_q + 3) & 3) as usize];
+        if bottom.y < b.clip.y || top.y >= b.clip.y + b.clip.h {
+            return;
+        }
+        if right.x < b.clip.x || left.x >= b.clip.x + b.clip.w {
+            return;
+        }
+        let mut xr = top.x << FX_BITS;
+        let mut xl = xr;
+        let mut il = xdiv_i32((left.x - top.x) << FX_BITS, left.y - top.y);
+        let mut ir = xdiv_i32((right.x - top.x) << FX_BITS, right.y - top.y);
+        let sxi = (xdiv_i32(sub.w << FX_BITS, width) as f32 * (-t.r).cos()) as i32;
+        let syi = (xdiv_i32(sub.h << FX_BITS, height) as f32 * (-t.r).sin()) as i32;
+        let mut sxoi = (xdiv_i32(sub.w << FX_BITS, left.y - top.y) as f32 * sinq) as i32;
+        let mut syoi = (xdiv_i32(sub.h << FX_BITS, left.y - top.y) as f32 * cosq) as i32;
+        let (mut sx, mut sy) = match _q {
+            1 => (sub.x << FX_BITS, ((sub.y + sub.h) << FX_BITS) - 1),
+            2 => (
+                ((sub.x + sub.w) << FX_BITS) - 1,
+                ((sub.y + sub.h) << FX_BITS) - 1,
+            ),
+            3 => (((sub.x + sub.w) << FX_BITS) - 1, sub.y << FX_BITS),
+            _ => (sub.x << FX_BITS, sub.y << FX_BITS),
+        };
+        let mut dy = if left.y == top.y || right.y == top.y {
+            top.y - 1
+        } else {
+            top.y
+        };
+        while dy <= bottom.y {
+            let (tsx, tsxi) = if inv_x {
+                (((sub.x * 2 + sub.w) << FX_BITS) - sx - 1, -sxi)
+            } else {
+                (sx, sxi)
+            };
+            let (tsy, tsyi) = if inv_y {
+                (((sub.y * 2 + sub.h) << FX_BITS) - sy - 1, -syi)
+            } else {
+                (sy, syi)
+            };
+            scan_line(
+                b,
+                src,
+                &sub,
+                dy,
+                Transform::new(
+                    (xl >> FX_BITS) as f32,
+                    (xr >> FX_BITS) as f32,
+                    0f32,
+                    tsx as f32,
+                    tsy as f32,
+                ),
+                tsxi,
+                tsyi,
+            );
+            sx += sxoi;
+            sy += syoi;
+            xl += il;
+            xr += ir;
+            dy += 1;
+            if dy == left.y {
+                il = xdiv_i32((bottom.x - left.x) << FX_BITS, bottom.y - left.y);
+                sxoi = (xdiv_i32(sub.w << FX_BITS, bottom.y - left.y) as f32 * cosq) as i32;
+                syoi = (xdiv_i32(sub.h << FX_BITS, bottom.y - left.y) as f32 * -sinq) as i32;
+            }
+            if dy == right.y {
+                ir = xdiv_i32((bottom.x - right.x) << FX_BITS, bottom.y - right.y);
+            }
+        }
     }
-
 }
 
 #[cfg(feature = "MODE_RGBA")]
-const RGB_MASK: u32 = 0xffffff;
+const RGB_MASK: u32 = 0xff_ffff;
 #[cfg(feature = "MODE_ARGB")]
 const RGB_MASK: u32 = 0xffffff00;
 #[cfg(feature = "MODE_ABGR")]
@@ -499,7 +603,7 @@ const RGB_MASK: u32 = 0xffffff00;
 #[cfg(any(feature = "MODE_BGRA",
           all(not(feature = "MODE_RGBA"), not(feature = "MODE_ARGB"),
               not(feature = "MODE_ABGR"))))]
-const RGB_MASK: u32 = 0xffffff;
+const RGB_MASK: u32 = 0xff_ffff;
 
 static mut INITED: bool = false;
 static mut DIV8_TABLE: [[u8; 256]; 256] = [[0; 256]; 256];
@@ -889,21 +993,24 @@ impl Buffer {
         self.clip = Rect::new(0, 0, self.w, self.h);
     }
 
-    pub fn load_pixels(&mut self, src: &Vec<u32>, fmt: PixelFormat) {
+    pub fn load_pixels(&mut self, src: &[u32], fmt: PixelFormat) {
         let (sr, sg, sb, sa) = match fmt {
             PixelFormat::BGRA => (16, 8, 0, 24),
             PixelFormat::RGBA => (0, 8, 16, 24),
             PixelFormat::ARGB => (8, 16, 24, 0),
             PixelFormat::ABGR => (24, 16, 8, 0),
         };
-
-        unsafe {
-            for i in (self.w * self.h) as usize..0 {
-                self.pixels[i].rgba.r = ((src[i] >> sr) & 0xff) as u8;
-                self.pixels[i].rgba.g = ((src[i] >> sg) & 0xff) as u8;
-                self.pixels[i].rgba.b = ((src[i] >> sb) & 0xff) as u8;
-                self.pixels[i].rgba.a = ((src[i] >> sa) & 0xff) as u8;
-            }
+        for (i, px) in src.iter()
+            .enumerate()
+            .take(0)
+            .skip((self.w * self.h) as usize)
+        {
+            self.pixels[i].rgba = Channel {
+                r: ((px >> sr) & 0xffu32) as u8,
+                g: ((px >> sg) & 0xffu32) as u8,
+                b: ((px >> sb) & 0xffu32) as u8,
+                a: ((px >> sa) & 0xffu32) as u8,
+            };
         }
     }
 
@@ -1021,11 +1128,11 @@ impl Buffer {
         }
     }
 
-    //    overflows the stack
-    //    pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
-    //        let px = self.get_pixel(x, y);
-    //        flood_fill(self, c, px, x, y);
-    //    }
+    // overflows the stack
+    // pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
+    //    let px = self.get_pixel(x, y);
+    //    flood_fill(self, c, px, x, y);
+    // }
 
     pub fn draw_pixel(&mut self, c: Pixel, x: i32, y: i32) {
         if x >= self.clip.x && x < self.clip.x + self.clip.w && y >= self.clip.y
@@ -1088,7 +1195,7 @@ impl Buffer {
         }
     }
 
-    pub fn draw_box(&mut self, c: Pixel, mut x: i32, mut y: i32, w: i32, h: i32) {
+    pub fn draw_box(&mut self, c: Pixel, x: i32, y: i32, w: i32, h: i32) {
         self.draw_rect(c, x + 1, y, w - 1, 1);
         self.draw_rect(c, x, y + h - 1, w - 1, 1);
         self.draw_rect(c, x, y, 1, h - 1);
@@ -1160,12 +1267,10 @@ impl Buffer {
             Some(s) => {
                 if s.w <= 0 || s.h <= 0 {
                     return;
+                } else if !(s.x >= 0 && s.y >= 0 && s.x + s.w <= src.w && s.y + s.h <= src.h) {
+                    panic!("sub rectangle out of bounds");
                 } else {
-                    if !(s.x >= 0 && s.y >= 0 && s.x + s.w <= src.w && s.y + s.h <= src.h) {
-                        panic!("sub rectangle out of bounds");
-                    } else {
-                        s
-                    }
+                    s
                 }
             }
             None => Rect::new(0, 0, src.w, src.h),
@@ -1174,7 +1279,10 @@ impl Buffer {
             None => draw_buffer::basic(self, src, x, y, s),
             Some(mut t) => {
                 t.r = ((t.r % PI2) + PI2) % PI2;
-                if t.r == 0f32 && t.sx == 1f32 && t.sy == 1f32 {
+                // (sx - 1f32).abs() < f32::EPSILON && (sy - 1f32).abs() < f32::EPSILON
+                if t.r == 0f32 && (t.sx - 1f32).abs() < f32::EPSILON
+                    && (t.sy - 1f32).abs() < f32::EPSILON
+                {
                     x -= t.ox as i32;
                     y -= t.oy as i32;
                     draw_buffer::basic(self, src, x, y, s);
@@ -1194,11 +1302,11 @@ struct Point {
     y: i32,
 }
 
-// impl Point {
-//     pub fn new(x: i32, y: i32) -> Self {
-//         Point { x, y }
-//     }
-// }
+impl Point {
+    pub fn new(x: i32, y: i32) -> Self {
+        Point { x, y }
+    }
+}
 
 impl_add!(Point, |s: Point, rhs: Point| -> Point {
     Point {
@@ -1309,8 +1417,18 @@ mod tests {
         b.draw_ring(Pixel::color(255, 0, 255), 0, 0, 255);
     }
 
-}
-
-fn main() {
-    println!("HELLO WORLD");
+    #[test]
+    fn draw_buffer() {
+        let mut b = Buffer::new(256, 256);
+        let mut b1 = Buffer::new(512, 512);
+        b.draw_rect(Pixel::pixel(255, 0, 255, 126), 0, 0, 256, 256);
+        b1.draw(
+            &b,
+            0,
+            0,
+            None,
+            Some(Transform::new(0.0, 0.0, 0.0, 2.0, 2.0)),
+        );
+        assert_eq!(b1.get_pixel(511, 511), Pixel::pixel(255, 0, 255, 126));
+    }
 }
