@@ -58,7 +58,6 @@ fn draw_buffer_basic(buf: &mut Buffer) {
     b.draw_circle(Pixel::color(255, 255, 0), d, d, 16);
     b.draw_ring(Pixel::color(255, 0, 255), d, d, 96);
     b.draw_pixel(Pixel::color(255, 255, 255), 255, 255);
-
     buf.draw(&b, 0, 0, None, None);
 }
 
@@ -73,13 +72,12 @@ fn draw_buffer_scaled(buf: &mut Buffer) {
     b.draw_circle(Pixel::color(255, 255, 0), d, d, 16);
     b.draw_ring(Pixel::color(255, 0, 255), d, d, 96);
     b.draw_pixel(Pixel::color(255, 255, 255), 128, 128);
-
     buf.draw(
         &b,
         0,
         0,
         None,
-        Some(Transform::new(0.0, 0.0, 0.0, 4.0, 4.0)),
+        Some(Transform::new(0.0, 0.0, 0.0, 2.0, 6.0)),
     );
 }
 
@@ -94,14 +92,23 @@ fn draw_buffer_rotate_scaled(buf: &mut Buffer) {
     b.draw_circle(Pixel::color(255, 255, 0), d, d, 16);
     b.draw_ring(Pixel::color(255, 0, 255), d, d, 96);
     b.draw_pixel(Pixel::color(255, 255, 255), 128, 128);
-
-    buf.draw(
-        &b,
-        0,
-        0,
-        None,
-        Some(Transform::new(0.0, 0.0, 8.0, 4.0, 4.0)),
-    );
+    static mut TICKS: f32 = 0.0;
+    unsafe {
+        TICKS = (TICKS + 0.1) % 3.0;
+        buf.draw(
+            &b,
+            0,
+            0,
+            None,
+            Some(Transform::new(
+                -63.0,
+                63.0,
+                45.0f32.to_radians(),
+                TICKS - 0.4,
+                TICKS,
+            )),
+        );
+    }
 }
 
 #[inline]
@@ -124,7 +131,6 @@ fn draw_test() {
         .unwrap();
     let mut buffer = Buffer::new(512i32, 512i32);
     buffer.set_alpha(255);
-
     let mut event_pump = ctx.event_pump().unwrap();
     let max_fps = 60;
     let tests: Vec<fn(&mut Buffer)> = vec![
@@ -139,10 +145,8 @@ fn draw_test() {
         draw_buffer_scaled,
         draw_buffer_rotate_scaled,
     ];
-
     let mut current = 0;
     let count: usize = tests.len();
-
     'running: loop {
         {
             let surface = win.surface(&event_pump);

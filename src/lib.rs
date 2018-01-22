@@ -489,8 +489,8 @@ mod draw_buffer {
             if t.sy < 0f32 { -t.sy } else { t.sy };
         let inv_x = t.sx < 0f32;
         let inv_y = t.sy < 0f32;
-        let width = sub.w * abs_sx as i32;
-        let height = sub.h * abs_sy as i32;
+        let width = (sub.w as f32 * abs_sx) as i32;
+        let height = (sub.h as f32 * abs_sy) as i32;
         let _q = (t.r * 4f32 / PI2) as i32;
         let cosq = (_q as f32 * PI2 / 4f32).cos();
         let sinq = (_q as f32 * PI2 / 4f32).sin();
