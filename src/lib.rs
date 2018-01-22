@@ -1,3 +1,7 @@
+// TODO: copy_pixel::basic
+// TODO: copy_pixel::scaled
+// AT: Buffer::noise
+
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, f32};
 
@@ -111,97 +115,31 @@ fn clip_rect(r: &mut Rect, to: &Rect) {
     let x2 = (r.x + r.w).min(to.x + to.w);
     let y2 = (r.y + r.h).min(to.y + to.h);
     r.x = x1;
-    r.w = x2 - x1;
     r.y = y1;
-    r.h = y2 - y1;
+    r.w = (x2 - x1).max(0);
+    r.h = (y2 - y1).max(0);
 }
 
 fn clip_rect_offset(r: &mut Rect, x: &mut i32, y: &mut i32, to: &mut Rect) {
-    let mut d = to.x - *x;
-    if d > 0 {
-        *x += d;
-        r.w -= d;
-        r.x += d
+    let _d = to.x - *x;
+    if _d > 0 {
+        *x += _d;
+        r.w -= _d;
+        r.x += _d
     }
-    d = to.y - *y;
-    if d > 0 {
-        *y += d;
-        r.h -= d;
-        r.y += d
+    let _d = to.y - *y;
+    if _d > 0 {
+        *y += _d;
+        r.h -= _d;
+        r.y += _d
     }
-    d = (*x + r.w) - (to.x + to.w);
-    if d > 0 {
-        r.x -= d;
+    let _d = (*x + r.w) - (to.x + to.w);
+    if _d > 0 {
+        r.w -= _d;
     }
-    d = (*y + r.h) - (to.y + to.h);
-    if d > 0 {
-        r.y -= d;
-    }
-}
-
-fn copy_pixel_basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
-    clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
-    if sub.w == 0 || sub.h == 0 {
-        return;
-    }
-    for i in 0..sub.h {
-        let b_offset = i * b.w;
-        let s_offset = i * src.w;
-        b.pixels[b_offset as usize..(b.w + b_offset) as usize]
-            .copy_from_slice(&src.pixels[s_offset as usize..(src.w + s_offset) as usize]);
-    }
-}
-
-fn copy_pixels_scaled(
-    b: &mut Buffer,
-    src: &Buffer,
-    mut x: i32,
-    mut y: i32,
-    mut sub: Rect,
-    scalex: f32,
-    scaley: f32,
-) {
-    let mut width = (sub.w as f32 * scalex) as i32;
-    let mut height = (sub.h as f32 * scaley) as i32;
-    let inx = (FX_UNIT as f32 / scalex) as i32;
-    let iny = (FX_UNIT as f32 / scaley) as i32;
-
-    let delta = b.clip.x - x;
-    if delta > 0 {
-        x += delta;
-        sub.x += (delta as f32 / scalex) as i32;
-        width -= delta;
-    }
-    let delta = b.clip.y - y;
-    if delta > 0 {
-        y += delta;
-        sub.y += (delta as f32 / scaley) as i32;
-        height -= delta;
-    }
-    let delta = (x + width) - (b.clip.x + b.clip.w);
-    if delta > 0 {
-        width -= delta;
-    }
-    let delta = (y + height) - (b.clip.y + b.clip.h);
-    if delta > 0 {
-        height -= delta;
-    }
-
-    if width == 0 || height == 0 {
-        return;
-    }
-    let mut sy = sub.y << FX_BITS;
-    for dy in y..(y + height) {
-        let pixels = &src.pixels[((sub.x >> FX_BITS) + src.w * (sy >> FX_BITS)) as usize..];
-        let mut sx = 0;
-        let mut dx = x + b.w * dy;
-        let edx = dx + width;
-        while dx < edx {
-            dx += 1;
-            b.pixels[(dx - 1) as usize] = pixels[(sx >> FX_BITS) as usize];
-            sx += inx;
-        }
-        sy += iny;
+    let _d = (*y + r.h) - (to.y + to.h);
+    if _d > 0 {
+        r.h -= _d;
     }
 }
 
@@ -306,6 +244,77 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
         }
     }
     return;
+}
+
+mod copy_pixel {
+    use super::*;
+
+    // TODO: test with clipping rect and sub rect
+    pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
+        clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
+        if sub.w <= 0 || sub.h <= 0 {
+            return;
+        }
+        for i in 0..sub.h {
+            let b_offset = i * b.w;
+            let s_offset = i * src.w;
+            b.pixels[b_offset as usize..(b.w + b_offset) as usize]
+                .copy_from_slice(&src.pixels[s_offset as usize..(src.w + s_offset) as usize]);
+        }
+    }
+
+    // TODO: test with clipping rect and sub rect
+    pub fn scaled(
+        b: &mut Buffer,
+        src: &Buffer,
+        mut x: i32,
+        mut y: i32,
+        mut sub: Rect,
+        scalex: f32,
+        scaley: f32,
+    ) {
+        let mut width = (sub.w as f32 * scalex) as i32;
+        let mut height = (sub.h as f32 * scaley) as i32;
+        let inx = (FX_UNIT as f32 / scalex) as i32;
+        let iny = (FX_UNIT as f32 / scaley) as i32;
+
+        let _d = b.clip.x - x;
+        if _d > 0 {
+            x += _d;
+            sub.x += (_d as f32 / scalex) as i32;
+            width -= _d;
+        }
+        let _d = b.clip.y - y;
+        if _d > 0 {
+            y += _d;
+            sub.y += (_d as f32 / scaley) as i32;
+            height -= _d;
+        }
+        let _d = (x + width) - (b.clip.x + b.clip.w);
+        if _d > 0 {
+            width -= _d;
+        }
+        let _d = (y + height) - (b.clip.y + b.clip.h);
+        if _d > 0 {
+            height -= _d;
+        }
+        if width == 0 || height == 0 {
+            return;
+        }
+        let mut sy = sub.y << FX_BITS;
+        for dy in y..(y + height) {
+            let pixel = &src.pixels[((sub.x >> FX_BITS) + src.w * (sy >> FX_BITS)) as usize..];
+            let mut sx = 0;
+            let mut dx = x + b.w * dy;
+            let edx = dx + width;
+            while dx < edx {
+                b.pixels[dx as usize] = pixel[(sx >> FX_BITS) as usize];
+                sx += inx;
+                dx += 1;
+            }
+            sy += iny;
+        }
+    }
 }
 
 mod draw_buffer {
@@ -960,6 +969,13 @@ pub struct Buffer {
 
 impl Buffer {
     pub fn new(w: i32, h: i32) -> Buffer {
+        if w < 1 {
+            panic!("expected width of 1 or greater")
+        }
+        if h < 1 {
+            panic!("expected height of 1 or greater")
+        }
+
         init_8bit();
         let black = Pixel::color(0, 0, 0);
         let mut buf = Buffer {
@@ -1017,12 +1033,12 @@ impl Buffer {
         }
     }
 
-    pub fn set_alpha(&mut self, alpha: u8) {
-        self.mode.alpha = alpha;
+    pub fn set_blend(&mut self, blend: BlendMode) {
+        self.mode.blend = blend;
     }
 
-    pub fn set_blend(&mut self, mode: BlendMode) {
-        self.mode.blend = mode;
+    pub fn set_alpha(&mut self, alpha: u8) {
+        self.mode.alpha = alpha;
     }
 
     pub fn set_color(&mut self, c: Pixel) {
@@ -1053,14 +1069,14 @@ impl Buffer {
     }
 
     pub fn get_pixel(&self, x: i32, y: i32) -> Pixel {
-        if x < self.w && y < self.h {
+        if x >= 0 && y >= 0 && x < self.w && y < self.h {
             return self.pixels[(x + y * self.w) as usize];
         }
         Pixel { word: 0 }
     }
 
     pub fn set_pixel(&mut self, c: Pixel, x: i32, y: i32) {
-        if x < self.w && y < self.h {
+        if x >= 0 && y >= 0 && x < self.w && y < self.h {
             self.pixels[(x + y * self.w) as usize] = c;
         }
     }
@@ -1071,30 +1087,30 @@ impl Buffer {
         x: i32,
         y: i32,
         sub: Option<Rect>,
-        mut sx: f32,
-        mut sy: f32,
+        sx: f32,
+        sy: f32,
     ) {
-        sx = sx.abs();
-        sy = sy.abs();
+        let sx = sx.abs();
+        let sy = sy.abs();
         if sx == 0f32 || sy == 0f32 {
             return;
         }
         let s = match sub {
-            Some(s) => {
-                if s.w == 0 || s.h == 0 {
+            Some(_s) => {
+                if _s.w <= 0 || _s.h <= 0 {
                     return;
                 }
-                if !(s.x + s.w <= src.w && s.y + s.h <= src.h) {
+                if !(_s.x >= 0 && _s.y >= 0 && _s.x + _s.w <= src.w && _s.y + _s.h <= src.h) {
                     panic!("sub rectangle out of bounds");
                 }
-                s
+                _s
             }
             None => Rect::new(0, 0, src.w, src.h),
         };
         if (sx - 1f32).abs() < f32::EPSILON && (sy - 1f32).abs() < f32::EPSILON {
-            copy_pixel_basic(self, src, x, y, s);
+            copy_pixel::basic(self, src, x, y, s);
         } else {
-            copy_pixels_scaled(self, src, x, y, s, sx, sy);
+            copy_pixel::scaled(self, src, x, y, s, sx, sy);
         }
     }
 
@@ -1104,18 +1120,18 @@ impl Buffer {
         let high = high.max(low + 1);
         unsafe {
             if grey {
-                for i in 0..(self.w * self.h) as usize {
-                    let px = (low + s.rand() as u8) % (high - low);
-                    self.pixels[i].rgba = Channel::new(px, px, px, 0xff);
+                for px in &mut self.pixels {
+                    let p = (low + s.rand() as u8) % (high - low);
+                    px.rgba = Channel::new(p, p, p, 0xff);
                 }
             } else {
-                for i in 0..(self.w * self.h) as usize {
-                    self.pixels[i].word = s.rand() | !RGB_MASK;
-                    self.pixels[i].rgba = Channel::new(
-                        low + self.pixels[i].rgba.r % (high - low),
-                        low + self.pixels[i].rgba.g % (high - low),
-                        low + self.pixels[i].rgba.b % (high - low),
-                        self.pixels[i].rgba.a,
+                for px in &mut self.pixels {
+                    px.word = s.rand() | !RGB_MASK;
+                    px.rgba = Channel::new(
+                        low + px.rgba.r % (high - low),
+                        low + px.rgba.g % (high - low),
+                        low + px.rgba.b % (high - low),
+                        px.rgba.a,
                     );
                 }
             }
@@ -1357,4 +1373,8 @@ impl RandState {
         self.w = self.w ^ (self.w >> 19) ^ t ^ (t >> 8);
         self.w
     }
+}
+
+fn main() {
+    println!("HELLO WORLD");
 }
