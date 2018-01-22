@@ -77,7 +77,7 @@ fn draw_buffer_scaled(buf: &mut Buffer) {
         0,
         0,
         None,
-        Some(Transform::new(0.0, 0.0, 0.0, 2.0, 6.0)),
+        Some(Transform::new(0.0, 0.0, 0.0, 3.0, 2.0)),
     );
 }
 
@@ -93,19 +93,21 @@ fn draw_buffer_rotate_scaled(buf: &mut Buffer) {
     b.draw_ring(Pixel::color(255, 0, 255), d, d, 96);
     b.draw_pixel(Pixel::color(255, 255, 255), 128, 128);
     static mut TICKS: f32 = 0.0;
+    static mut ROT: f32 = 0.0;
     unsafe {
-        TICKS = (TICKS + 0.1) % 3.0;
+        TICKS = (TICKS + 0.2) % 3.0;
+        ROT += 1.0;
         buf.draw(
             &b,
-            0,
-            0,
+            256,
+            256,
             None,
             Some(Transform::new(
-                -63.0,
                 63.0,
-                45.0f32.to_radians(),
-                TICKS - 0.4,
-                TICKS,
+                63.0,
+                ROT.to_radians(),
+                2.0 * TICKS.sin() + 1.0,
+                2.0 * TICKS.sin() + 1.0,
             )),
         );
     }

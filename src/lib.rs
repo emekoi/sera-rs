@@ -366,7 +366,7 @@ mod draw_buffer {
         y = (y as f32
             - ((if t.sy < 0.0 { height } else { 0 }) - (if t.sy < 0.0 { -1 } else { 1 })) as f32
                 * t.oy * abs_sy) as i32;
-        if x + width < b.clip.w || x > b.clip.x + b.clip.w {
+        if x + width < b.clip.x || x > b.clip.x + b.clip.w {
             return;
         }
         let mut dy = 0;
