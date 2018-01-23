@@ -1,6 +1,7 @@
 // TODO: copy_pixel::basic
 // TODO: copy_pixel::scaled
-// AT: Buffer::noise
+// TODO: draw_buffer::basic
+// AT: draw_buffer::scaled
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, f32};
@@ -29,10 +30,9 @@ macro_rules! tu32 {
 
 macro_rules! draw_row {
     ($buf: expr, $rows: expr, $c:expr, $x:expr, $y:expr, $len:expr) => {
-        let y__ = $y;
-        if y__ >= 0 && !$rows[y__ as usize >> 5] & (1 << (y__ & 31)) > 0 {
-            $buf.draw_rect($c, $x, y__, $len, 1);
-            $rows[y__ as usize >> 5] |= 1 << (y__ & 31);
+        if $y >= 0 && !$rows[$y as usize >> 5] & (1 << ($y & 31)) > 0 {
+            $buf.draw_rect($c, $x, $y, $len, 1);
+            $rows[$y as usize >> 5] |= 1 << ($y & 31);
         }
     };
 }
@@ -148,16 +148,19 @@ fn clip_rect_offset(r: &mut Rect, x: &mut i32, y: &mut i32, to: &mut Rect) {
 //        if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize] != o {
 //            return;
 //        }
+//        /* Fill left */
 //        let mut il = x;
 //        while il >= 0 && b.pixels[(il + y * b.w) as usize] == o {
 //            b.pixels[(il + y * b.w) as usize] = color;
 //            il -= 1;
 //        }
+//        /* Fill right */
 //        let mut ir = if x < b.w - 1 { x + 1 } else { x };
 //        while ir < b.w && b.pixels[(ir + y * b.w) as usize] == o {
 //            b.pixels[(ir + y * b.w) as usize] = color;
 //            ir += 1;
 //        }
+//        /* Fill up and down */
 //        while il <= ir {
 //            flood_fill(b, color, o, il, y - 1);
 //            flood_fill(b, color, o, il, y + 1);
@@ -172,12 +175,13 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
         if alpha <= 1 {
             return;
         }
+        /* Color */
         if m.color != RGB_MASK {
             s.rgba.r = sh8!(tu32!(s.rgba.r) * tu32!(m.color.rgba.r), >>) as u8;
             s.rgba.g = sh8!(tu32!(s.rgba.g) * tu32!(m.color.rgba.g), >>) as u8;
             s.rgba.b = sh8!(tu32!(s.rgba.b) * tu32!(m.color.rgba.b), >>) as u8;
         }
-
+        /* Blend */
         match m.blend {
             BlendMode::ALPHA => {}
             BlendMode::COLOR => s = m.color,
@@ -187,9 +191,9 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
                 s.rgba.b = 0xff.min(tu32!(d.rgba.b) + tu32!(s.rgba.b)) as u8;
             }
             BlendMode::SUBTRACT => {
-                s.rgba.r = 0x00i32.min(i32::from(d.rgba.r) - i32::from(s.rgba.r)) as u8;
-                s.rgba.g = 0x00i32.min(i32::from(d.rgba.g) - i32::from(s.rgba.g)) as u8;
-                s.rgba.b = 0x00i32.min(i32::from(d.rgba.b) - i32::from(s.rgba.b)) as u8;
+                s.rgba.r = 0i32.min(i32::from(d.rgba.r) - i32::from(s.rgba.r)) as u8;
+                s.rgba.g = 0i32.min(i32::from(d.rgba.g) - i32::from(s.rgba.g)) as u8;
+                s.rgba.b = 0i32.min(i32::from(d.rgba.b) - i32::from(s.rgba.b)) as u8;
             }
             BlendMode::MULTIPLY => {
                 s.rgba.r = sh8!(u32::from(s.rgba.r) * tu32!(d.rgba.r), >>) as u8;
@@ -230,14 +234,14 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
             d.rgba.b = lerp!(8u32, d.rgba.b, s.rgba.b, alpha) as u8;
         } else {
             let a = (0xff - ((tu32!(0xff - d.rgba.a) * tu32!(0xff - alpha)) >> 8)) as u8;
-            let zeta = (tu32!(d.rgba.a * (0xff - alpha)) >> 8) as u8;
-            d.rgba.r = DIV8_TABLE[(sh8!(tu32!(d.rgba.r) * tu32!(zeta), >>)
+            let _z = (tu32!(d.rgba.a * (0xff - alpha)) >> 8) as u8;
+            d.rgba.r = DIV8_TABLE[(sh8!(tu32!(d.rgba.r) * tu32!(_z), >>)
                                       + sh8!(tu32!(s.rgba.r) * tu32!(alpha), >>))
                                       as usize][a as usize];
-            d.rgba.g = DIV8_TABLE[(sh8!(tu32!(d.rgba.g) * tu32!(zeta), >>)
+            d.rgba.g = DIV8_TABLE[(sh8!(tu32!(d.rgba.g) * tu32!(_z), >>)
                                       + sh8!(tu32!(s.rgba.g) * tu32!(alpha), >>))
                                       as usize][a as usize];
-            d.rgba.b = DIV8_TABLE[(sh8!(tu32!(d.rgba.b) * tu32!(zeta), >>)
+            d.rgba.b = DIV8_TABLE[(sh8!(tu32!(d.rgba.b) * tu32!(_z), >>)
                                       + sh8!(tu32!(s.rgba.b) * tu32!(alpha), >>))
                                       as usize][a as usize];
             d.rgba.a = a;
@@ -251,10 +255,13 @@ mod copy_pixel {
 
     // TODO: test with clipping rect and sub rect
     pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
+        /* Clip to destination buffer */
         clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
+        /* Clipped off screen? */
         if sub.w <= 0 || sub.h <= 0 {
             return;
         }
+        /* Copy pixels */
         for i in 0..sub.h {
             let b_offset = i * b.w;
             let s_offset = i * src.w;
@@ -277,7 +284,7 @@ mod copy_pixel {
         let mut height = (sub.h as f32 * scaley) as i32;
         let inx = (FX_UNIT as f32 / scalex) as i32;
         let iny = (FX_UNIT as f32 / scaley) as i32;
-
+        /* Clip to destination buffer */
         let _d = b.clip.x - x;
         if _d > 0 {
             x += _d;
@@ -298,9 +305,11 @@ mod copy_pixel {
         if _d > 0 {
             height -= _d;
         }
+        /* Clipped offscreen? */
         if width == 0 || height == 0 {
             return;
         }
+        /* Draw */
         let mut sy = sub.y << FX_BITS;
         for dy in y..(y + height) {
             let pixel = &src.pixels[((sub.x >> FX_BITS) + src.w * (sy >> FX_BITS)) as usize..];
@@ -321,36 +330,34 @@ mod draw_buffer {
     use super::*;
 
     pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
+        /* Clip to destination buffer */
         clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
+        /* Clipped off screen? */
         if sub.w <= 0 || sub.h <= 0 {
             return;
         }
-        let dst_ptr = b.pixels.as_mut_ptr();
-        let src_ptr = src.pixels.as_ptr();
+        /* Draw */
         for iy in 0..(sub.h as usize) {
-            unsafe {
-                let mut pd = dst_ptr.offset((x + (y + iy as i32) * b.w) as isize);
-                let ps = src_ptr.offset((sub.x + (sub.y + iy as i32) * src.w) as isize);
-                let (mut d_off, mut s_off) = (0, 0);
-                let mut ix = sub.w;
-                while ix > 0 {
-                    blend_pixel(&b.mode, &mut *(pd.offset(d_off)), *(ps.offset(s_off)));
-                    d_off += 1;
-                    s_off += 1;
-                    ix -= 1;
-                }
+            let mut pd = &mut b.pixels[(x + (y + iy as i32) * b.w) as usize..];
+            let ps = &src.pixels[(sub.x + (sub.y + iy as i32) * src.w) as usize..];
+            let (mut d_off, mut s_off) = (0, 0);
+            for _ in 0..sub.w {
+                blend_pixel(&b.mode, &mut pd[d_off], ps[s_off]);
+                d_off += 1;
+                s_off += 1;
             }
+            /* TODO: check if this is the same */
+            // let mut ix = sub.w;
+            // while ix > 0 {
+            //     blend_pixel(&b.mode, &mut pd[d_off], ps[s_off]);
+            //     d_off += 1;
+            //     s_off += 1;
+            //     ix -= 1;
+            // }
         }
     }
 
-    pub fn scaled(
-        b: &mut Buffer,
-        src: &Buffer,
-        mut x: i32,
-        mut y: i32,
-        mut sub: Rect,
-        t: Transform,
-    ) {
+    pub fn scaled(b: &mut Buffer, src: &Buffer, x: i32, y: i32, mut sub: Rect, t: Transform) {
         let abs_sx =
             if t.sx < 0.0 { -t.sx } else { t.sx };
         let abs_sy =
@@ -369,15 +376,20 @@ mod draw_buffer {
         };
         let ix = ((sub.w << FX_BITS) as f32 / t.sx / sub.w as f32) as i32;
         let iy = ((sub.h << FX_BITS) as f32 / t.sy / sub.h as f32) as i32;
-        x = (x as f32
-            - ((if t.sx < 0.0 { width } else { 0 }) - (if t.sx < 0.0 { -1 } else { 1 })) as f32
-                * t.ox * abs_sx) as i32;
-        y = (y as f32
-            - ((if t.sy < 0.0 { height } else { 0 }) - (if t.sy < 0.0 { -1 } else { 1 })) as f32
-                * t.oy * abs_sy) as i32;
+        /* Adjust x/y depending on origin */
+        let x =
+            (x as f32
+                - ((if t.sx < 0.0 { width } else { 0 }) - (if t.sx < 0.0 { -1 } else { 1 })) as f32
+                    * t.ox * abs_sx) as i32;
+        let y =
+            (y as f32
+                - ((if t.sy < 0.0 { height } else { 0 }) - (if t.sy < 0.0 { -1 } else { 1 })) as f32
+                    * t.oy * abs_sy) as i32;
+        /* Clipped completely offscreen horizontally? */
         if x + width < b.clip.x || x > b.clip.x + b.clip.w {
             return;
         }
+        /* Adjust for clipping */
         let mut dy = 0;
         let mut odx = 0;
         let _d = b.clip.y - y;
@@ -398,6 +410,7 @@ mod draw_buffer {
         if _d > 0 {
             width -= _d;
         }
+        /* Draw */
         let mut sy = osy;
         while dy < height {
             let mut dx = odx;
@@ -426,6 +439,7 @@ mod draw_buffer {
         sx_incr: i32,
         sy_incr: i32,
     ) {
+        /* Adjust for clipping */
         if dy < b.clip.y || dy >= b.clip.y + b.clip.h {
             return;
         }
@@ -444,6 +458,8 @@ mod draw_buffer {
             right -= _d;
         }
         let (mut dx, mut x, mut y);
+        /* Does the scaline length go out of bounds of our `sub` rect? If so we
+         * should adjust the scan line and the source coordinates accordingly */
         'checkSourceLeft: loop {
             x = sx >> FX_BITS;
             y = sy >> FX_BITS;
@@ -470,6 +486,7 @@ mod draw_buffer {
                 break 'checkSourceRight;
             }
         }
+        /* Draw */
         dx = left;
         while dx < right {
             blend_pixel(
@@ -513,6 +530,7 @@ mod draw_buffer {
         } else {
             t.oy
         }) * abs_sy;
+        /* Store rotated corners as points */
         points[0].x = x + (cosr * (-ox) - sinr * (-oy)) as i32;
         points[0].y = y + (sinr * (-ox) + cosr * (-oy)) as i32;
         points[1].x = x + (cosr * (-ox + width as f32) - sinr * (-oy)) as i32;
@@ -521,20 +539,24 @@ mod draw_buffer {
         points[2].y = y + (sinr * (-ox + width as f32) + cosr * (-oy + height as f32)) as i32;
         points[3].x = x + (cosr * (-ox) - sinr * (-oy + height as f32)) as i32;
         points[3].y = y + (sinr * (-ox) + cosr * (-oy + height as f32)) as i32;
-        let top = &points[(-_q & 3) as usize];
+        /* Set named points based on rotation */
+        let top = &points[((-_q) & 3) as usize];
         let right = &points[((-_q + 1) & 3) as usize];
         let bottom = &points[((-_q + 2) & 3) as usize];
         let left = &points[((-_q + 3) & 3) as usize];
+        /* Clipped completely off screen? */
         if bottom.y < b.clip.y || top.y >= b.clip.y + b.clip.h {
             return;
         }
         if right.x < b.clip.x || left.x >= b.clip.x + b.clip.w {
             return;
         }
+        /* Destination */
         let mut xr = top.x << FX_BITS;
         let mut xl = xr;
         let mut il = xdiv_i32((left.x - top.x) << FX_BITS, left.y - top.y);
         let mut ir = xdiv_i32((right.x - top.x) << FX_BITS, right.y - top.y);
+        /* Source */
         let sxi = (xdiv_i32(sub.w << FX_BITS, width) as f32 * (-t.r).cos()) as i32;
         let syi = (xdiv_i32(sub.h << FX_BITS, height) as f32 * (-t.r).sin()) as i32;
         let mut sxoi = (xdiv_i32(sub.w << FX_BITS, left.y - top.y) as f32 * sinq) as i32;
@@ -548,12 +570,15 @@ mod draw_buffer {
             3 => (((sub.x + sub.w) << FX_BITS) - 1, sub.y << FX_BITS),
             _ => (sub.x << FX_BITS, sub.y << FX_BITS),
         };
+        /* Draw */
         let mut dy = if left.y == top.y || right.y == top.y {
+            /* Adjust for right-angled rotation */
             top.y - 1
         } else {
             top.y
         };
         while dy <= bottom.y {
+            /* Invert source iterators & increments if we are scaled negatively */
             let (tsx, tsxi) = if inv_x {
                 (((sub.x * 2 + sub.w) << FX_BITS) - sx - 1, -sxi)
             } else {
@@ -564,6 +589,7 @@ mod draw_buffer {
             } else {
                 (sy, syi)
             };
+            /* Draw row */
             scan_line(
                 b,
                 src,
@@ -584,6 +610,7 @@ mod draw_buffer {
             xl += il;
             xr += ir;
             dy += 1;
+            /* Modify increments if we've reached the left or right corner */
             if dy == left.y {
                 il = xdiv_i32((bottom.x - left.x) << FX_BITS, bottom.y - left.y);
                 sxoi = (xdiv_i32(sub.w << FX_BITS, bottom.y - left.y) as f32 * cosq) as i32;
@@ -622,11 +649,13 @@ fn init_8bit() {
         if INITED {
             return;
         }
+        /* Init 8bit divide lookup table */
         for b in 1..256 {
             for (a, t) in DIV8_TABLE.iter_mut().enumerate().take(256).skip(1) {
                 t[b] = ((a << 8) / b) as u8;
             }
         }
+        /* Inited */
         INITED = true;
     }
 }
@@ -975,7 +1004,7 @@ impl Buffer {
         if h < 1 {
             panic!("expected height of 1 or greater")
         }
-
+        /* Init lookup tables if not inited */
         init_8bit();
         let black = Pixel::color(0, 0, 0);
         let mut buf = Buffer {
@@ -1095,6 +1124,7 @@ impl Buffer {
         if sx == 0f32 || sy == 0f32 {
             return;
         }
+        /* Check sub rectangle */
         let s = match sub {
             Some(_s) => {
                 if _s.w <= 0 || _s.h <= 0 {
@@ -1107,9 +1137,12 @@ impl Buffer {
             }
             None => Rect::new(0, 0, src.w, src.h),
         };
+        /* Dispatch */
         if (sx - 1f32).abs() < f32::EPSILON && (sy - 1f32).abs() < f32::EPSILON {
+            /* Basic un-scaled copy */
             copy_pixel::basic(self, src, x, y, s);
         } else {
+            /* Scaled copy */
             copy_pixel::scaled(self, src, x, y, s, sx, sy);
         }
     }
@@ -1153,26 +1186,19 @@ impl Buffer {
     }
 
     pub fn draw_line(&mut self, c: Pixel, mut x0: i32, mut y0: i32, mut x1: i32, mut y1: i32) {
-        let steep: bool = {
-            let v0 = ((y1 as i32) - (y0 as i32)).abs();
-            let v1 = ((x1 as i32) - (x0 as i32)).abs();
-            v0 > v1
-        };
-
+        let steep = (y1 - y0).abs() > (x1 - x0).abs();
         if steep {
             swap!(x0, y0);
             swap!(x1, y1);
         }
-
         if x0 > x1 {
             swap!(x0, x1);
             swap!(y0, y1);
         }
-
         let deltax = x1 - x0;
-        let deltay = ((y1 as i32) - (y0 as i32)).abs() as i32;
-        let mut error: i32 = (deltax as i32) / 2;
-        let ystep = if y0 < y1 { 1 } else { -1i32 };
+        let deltay = (y1 - y0).abs();
+        let mut error: i32 = deltax / 2;
+        let ystep = if y0 < y1 { 1 } else { -1 };
         let mut y = y0;
         for x in x0..(x1 + 1) {
             if steep {
@@ -1188,13 +1214,13 @@ impl Buffer {
         }
     }
 
-    pub fn draw_rect(&mut self, c: Pixel, mut x: i32, mut y: i32, w: i32, h: i32) {
+    pub fn draw_rect(&mut self, c: Pixel, x: i32, y: i32, w: i32, h: i32) {
         let mut r = Rect::new(x, y, w, h);
         clip_rect(&mut r, &self.clip);
-        y = r.h;
+        let mut y = r.h;
         while y > 0 {
             y -= 1;
-            x = r.w;
+            let mut x = r.w;
             let p = &mut self.pixels[(r.x + (r.y + y) * self.w) as usize..];
             let mut i = 0;
             while x > 0 {
@@ -1216,7 +1242,10 @@ impl Buffer {
         let mut dx = radius.abs();
         let mut dy = 0;
         let mut radius_error = 1 - dx;
+        /* zeroset bit array of drawn rows -- we keep track of which rows have been
+         * drawn so that we can avoid overdraw */
         let mut rows: [u32; 512] = [0; 512];
+        /* Clipped completely off-screen? */
         if x + dx < self.clip.x || x - dx > self.clip.x + self.clip.w || y + dx < self.clip.y
             || y - dx > self.clip.y + self.clip.h
         {
@@ -1238,14 +1267,17 @@ impl Buffer {
     }
 
     pub fn draw_ring(&mut self, c: Pixel, x: i32, y: i32, radius: i32) {
+        /* TODO : Prevent against overdraw? */
         let mut dx = radius.abs();
         let mut dy = 0;
         let mut radius_error = 1 - dx;
+        /* Clipped completely off-screen? */
         if x + dx < self.clip.x || x - dx > self.clip.x + self.clip.w || y + dx < self.clip.y
             || y - dx > self.clip.y + self.clip.h
         {
             return;
         }
+        /* Draw */
         while dx >= dy {
             self.draw_pixel(c, dx + x, dy + y);
             self.draw_pixel(c, dy + x, dx + y);
@@ -1273,28 +1305,32 @@ impl Buffer {
         sub: Option<Rect>,
         t: Option<Transform>,
     ) {
+        /* Init sub rect */
         let s = match sub {
-            Some(s) => {
-                if s.w <= 0 || s.h <= 0 {
+            Some(_s) => {
+                if _s.w <= 0 || _s.h <= 0 {
                     return;
-                } else if !(s.x >= 0 && s.y >= 0 && s.x + s.w <= src.w && s.y + s.h <= src.h) {
+                } else if !(_s.x >= 0 && _s.y >= 0 && _s.x + _s.w <= src.w && _s.y + _s.h <= src.h)
+                {
                     panic!("sub rectangle out of bounds");
                 } else {
-                    s
+                    _s
                 }
             }
             None => Rect::new(0, 0, src.w, src.h),
         };
+        /* Draw */
         match t {
             None => draw_buffer::basic(self, src, x, y, s),
             Some(mut t) => {
+                /* Move rotation value into 0..PI2 range */
                 t.r = ((t.r % PI2) + PI2) % PI2;
-                // (sx - 1f32).abs() < f32::EPSILON && (sy - 1f32).abs() < f32::EPSILON
+                /* Not rotated or scaled? apply offset and draw basic */
                 if t.r == 0f32 && (t.sx - 1f32).abs() < f32::EPSILON
                     && (t.sy - 1f32).abs() < f32::EPSILON
                 {
-                    x -= t.ox as i32;
-                    y -= t.oy as i32;
+                    x = (x as f32 - t.ox) as i32;
+                    y = (y as f32 - t.oy) as i32;
                     draw_buffer::basic(self, src, x, y, s);
                 } else if t.r == 0f32 {
                     draw_buffer::scaled(self, src, x, y, s, t);
@@ -1373,8 +1409,4 @@ impl RandState {
         self.w = self.w ^ (self.w >> 19) ^ t ^ (t >> 8);
         self.w
     }
-}
-
-fn main() {
-    println!("HELLO WORLD");
 }
