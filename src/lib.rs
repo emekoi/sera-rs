@@ -1,7 +1,6 @@
 // TODO: copy_pixel::basic
 // TODO: copy_pixel::scaled
 // TODO: draw_buffer::basic
-// AT: draw_buffer::scaled
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, f32};
@@ -994,6 +993,7 @@ pub struct Buffer {
     pub pixels: Vec<Pixel>,
     pub w: i32,
     pub h: i32,
+    org: Point,
 }
 
 impl Buffer {
@@ -1013,6 +1013,7 @@ impl Buffer {
             clip: Rect::new(0, 0, w, h),
             pixels: vec![black; (w * h) as usize],
             mode: DrawMode::new(black, BlendMode::ALPHA, 0xff),
+            org: Point::new(0, 0),
         };
         buf.reset();
         buf
@@ -1030,6 +1031,11 @@ impl Buffer {
         self.h = h;
         self.pixels.resize((w * h) as usize, Pixel::color(0, 0, 0));
         self.clip = Rect::new(0, 0, self.w, self.h);
+    }
+
+    pub fn translate(&mut self, x: i32, y: i32) {
+        self.org.x = x;
+        self.org.y = y;
     }
 
     pub fn load_pixels(&mut self, src: &[u32], fmt: PixelFormat) {
@@ -1098,15 +1104,17 @@ impl Buffer {
     }
 
     pub fn get_pixel(&self, x: i32, y: i32) -> Pixel {
-        if x >= 0 && y >= 0 && x < self.w && y < self.h {
-            return self.pixels[(x + y * self.w) as usize];
+        let org = self.org;
+        if x + org.x >= 0 && y + org.y >= 0 && x + org.x < self.w && y + org.y < self.h {
+            return self.pixels[(x + org.x + (y + org.y) * self.w) as usize];
         }
         Pixel { word: 0 }
     }
 
     pub fn set_pixel(&mut self, c: Pixel, x: i32, y: i32) {
-        if x >= 0 && y >= 0 && x < self.w && y < self.h {
-            self.pixels[(x + y * self.w) as usize] = c;
+        let org = self.org;
+        if x + org.x >= 0 && y + org.y >= 0 && x + org.x < self.w && y + org.y < self.h {
+            self.pixels[(x + org.x + (y + org.y) * self.w) as usize] = c;
         }
     }
 
@@ -1138,12 +1146,13 @@ impl Buffer {
             None => Rect::new(0, 0, src.w, src.h),
         };
         /* Dispatch */
+        let org = self.org;
         if (sx - 1f32).abs() < f32::EPSILON && (sy - 1f32).abs() < f32::EPSILON {
             /* Basic un-scaled copy */
-            copy_pixel::basic(self, src, x, y, s);
+            copy_pixel::basic(self, src, x + org.x, y + org.y, s);
         } else {
             /* Scaled copy */
-            copy_pixel::scaled(self, src, x, y, s, sx, sy);
+            copy_pixel::scaled(self, src, x + org.x, y + org.y, s, sx, sy);
         }
     }
 
@@ -1178,10 +1187,15 @@ impl Buffer {
     // }
 
     pub fn draw_pixel(&mut self, c: Pixel, x: i32, y: i32) {
-        if x >= self.clip.x && x < self.clip.x + self.clip.w && y >= self.clip.y
-            && y < self.clip.y + self.clip.h
+        let org = self.org;
+        if x + org.x >= self.clip.x && x + org.x < self.clip.x + self.clip.w
+            && y + org.y >= self.clip.y && y + org.y < self.clip.y + self.clip.h
         {
-            blend_pixel(&self.mode, &mut self.pixels[(x + y * self.w) as usize], c);
+            blend_pixel(
+                &self.mode,
+                &mut self.pixels[(x + org.x + (y + org.y) * self.w) as usize],
+                c,
+            );
         }
     }
 
@@ -1200,11 +1214,12 @@ impl Buffer {
         let mut error: i32 = deltax / 2;
         let ystep = if y0 < y1 { 1 } else { -1 };
         let mut y = y0;
+        let org = self.org;
         for x in x0..(x1 + 1) {
             if steep {
-                self.draw_pixel(c, y, x);
+                self.draw_pixel(c, y + org.y, x + org.x);
             } else {
-                self.draw_pixel(c, x, y);
+                self.draw_pixel(c, x + org.x, y + org.y);
             }
             error -= deltay;
             if error < 0 {
@@ -1215,13 +1230,14 @@ impl Buffer {
     }
 
     pub fn draw_rect(&mut self, c: Pixel, x: i32, y: i32, w: i32, h: i32) {
-        let mut r = Rect::new(x, y, w, h);
+        let org = self.org;
+        let mut r = Rect::new(x + org.x, y + org.y, w, h);
         clip_rect(&mut r, &self.clip);
         let mut y = r.h;
         while y > 0 {
             y -= 1;
             let mut x = r.w;
-            let p = &mut self.pixels[(r.x + (r.y + y) * self.w) as usize..];
+            let p = &mut self.pixels[(r.x + org.x + (r.y + y + org.y) * self.w) as usize..];
             let mut i = 0;
             while x > 0 {
                 x -= 1;
@@ -1232,30 +1248,32 @@ impl Buffer {
     }
 
     pub fn draw_box(&mut self, c: Pixel, x: i32, y: i32, w: i32, h: i32) {
-        self.draw_rect(c, x + 1, y, w - 1, 1);
-        self.draw_rect(c, x, y + h - 1, w - 1, 1);
-        self.draw_rect(c, x, y, 1, h - 1);
-        self.draw_rect(c, x + w - 1, y + 1, 1, h - 1);
+        let org = self.org;
+        self.draw_rect(c, x + org.x + 1, y + org.y, w - 1, 1);
+        self.draw_rect(c, x + org.x, y + org.y + h - 1, w - 1, 1);
+        self.draw_rect(c, x + org.x, y + org.y, 1, h - 1);
+        self.draw_rect(c, x + org.x + w - 1, y + org.y + 1, 1, h - 1);
     }
 
     pub fn draw_circle(&mut self, c: Pixel, x: i32, y: i32, radius: i32) {
         let mut dx = radius.abs();
         let mut dy = 0;
         let mut radius_error = 1 - dx;
+        let org = self.org;
         /* zeroset bit array of drawn rows -- we keep track of which rows have been
          * drawn so that we can avoid overdraw */
         let mut rows: [u32; 512] = [0; 512];
         /* Clipped completely off-screen? */
-        if x + dx < self.clip.x || x - dx > self.clip.x + self.clip.w || y + dx < self.clip.y
-            || y - dx > self.clip.y + self.clip.h
+        if x + org.x + dx < self.clip.x || x + org.x - dx > self.clip.x + self.clip.w
+            || y + org.y + dx < self.clip.y || y + org.y - dx > self.clip.y + self.clip.h
         {
             return;
         }
         while dx >= dy {
-            draw_row!(self, rows, c, x - dx, y + dy, dx << 1);
-            draw_row!(self, rows, c, x - dx, y - dy, dx << 1);
-            draw_row!(self, rows, c, x - dy, y + dx, dy << 1);
-            draw_row!(self, rows, c, x - dy, y - dx, dy << 1);
+            draw_row!(self, rows, c, x + org.x - dx, y + org.y + dy, dx << 1);
+            draw_row!(self, rows, c, x + org.x - dx, y + org.y - dy, dx << 1);
+            draw_row!(self, rows, c, x + org.x - dy, y + org.y + dx, dy << 1);
+            draw_row!(self, rows, c, x + org.x - dy, y + org.y - dx, dy << 1);
             dy += 1;
             if radius_error < 0 {
                 radius_error += 2 * dy + 1;
@@ -1271,22 +1289,23 @@ impl Buffer {
         let mut dx = radius.abs();
         let mut dy = 0;
         let mut radius_error = 1 - dx;
+        let org = self.org;
         /* Clipped completely off-screen? */
-        if x + dx < self.clip.x || x - dx > self.clip.x + self.clip.w || y + dx < self.clip.y
-            || y - dx > self.clip.y + self.clip.h
+        if x + org.x + dx < self.clip.x || x + org.x - dx > self.clip.x + self.clip.w
+            || y + org.y + dx < self.clip.y || y + org.y - dx > self.clip.y + self.clip.h
         {
             return;
         }
         /* Draw */
         while dx >= dy {
-            self.draw_pixel(c, dx + x, dy + y);
-            self.draw_pixel(c, dy + x, dx + y);
-            self.draw_pixel(c, -dx + x, dy + y);
-            self.draw_pixel(c, -dy + x, dx + y);
-            self.draw_pixel(c, -dx + x, -dy + y);
-            self.draw_pixel(c, -dy + x, -dx + y);
-            self.draw_pixel(c, dx + x, -dy + y);
-            self.draw_pixel(c, dy + x, -dx + y);
+            self.draw_pixel(c, dx + x + org.x, dy + y + org.x);
+            self.draw_pixel(c, dy + x + org.x, dx + y + org.x);
+            self.draw_pixel(c, -dx + x + org.x, dy + y + org.x);
+            self.draw_pixel(c, -dy + x + org.x, dx + y + org.x);
+            self.draw_pixel(c, -dx + x + org.x, -dy + y + org.x);
+            self.draw_pixel(c, -dy + x + org.x, -dx + y + org.x);
+            self.draw_pixel(c, dx + x + org.x, -dy + y + org.x);
+            self.draw_pixel(c, dy + x + org.x, -dx + y + org.x);
             dy += 1;
             if radius_error < 0 {
                 radius_error += 2 * dy + 1;
@@ -1320,8 +1339,9 @@ impl Buffer {
             None => Rect::new(0, 0, src.w, src.h),
         };
         /* Draw */
+        let org = self.org;
         match t {
-            None => draw_buffer::basic(self, src, x, y, s),
+            None => draw_buffer::basic(self, src, x + org.x, y + org.y, s),
             Some(mut t) => {
                 /* Move rotation value into 0..PI2 range */
                 t.r = ((t.r % PI2) + PI2) % PI2;
@@ -1331,18 +1351,18 @@ impl Buffer {
                 {
                     x = (x as f32 - t.ox) as i32;
                     y = (y as f32 - t.oy) as i32;
-                    draw_buffer::basic(self, src, x, y, s);
+                    draw_buffer::basic(self, src, x + org.x, y + org.y, s);
                 } else if t.r == 0f32 {
-                    draw_buffer::scaled(self, src, x, y, s, t);
+                    draw_buffer::scaled(self, src, x + org.x, y + org.y, s, t);
                 } else {
-                    draw_buffer::rotate_scaled(self, src, x, y, s, t);
+                    draw_buffer::rotate_scaled(self, src, x + org.x, y + org.y, s, t);
                 }
             }
         }
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 struct Point {
     x: i32,
     y: i32,
