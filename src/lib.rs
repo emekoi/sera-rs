@@ -1,7 +1,5 @@
-// TODO: copy_pixel::basic
-// TODO: copy_pixel::scaled
-// TODO: draw_buffer::basic
-// AT: draw_buffer::scaled
+#[macro_use]
+extern crate lazy_static;
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, f32};
@@ -253,7 +251,6 @@ fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
 mod copy_pixel {
     use super::*;
 
-    // TODO: test with clipping rect and sub rect
     pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
         /* Clip to destination buffer */
         clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
@@ -263,14 +260,14 @@ mod copy_pixel {
         }
         /* Copy pixels */
         for i in 0..sub.h {
-            let b_offset = i * b.w;
-            let s_offset = i * src.w;
-            b.pixels[b_offset as usize..(b.w + b_offset) as usize]
-                .copy_from_slice(&src.pixels[s_offset as usize..(src.w + s_offset) as usize]);
+            let mut _b = &mut b.pixels[(x + (y + i) * b.w) as usize..];
+            let _s = &src.pixels[(sub.x + (sub.y + i) * src.w) as usize..];
+            for j in 0..(sub.w as usize) {
+                _b[j] = _s[j];
+            } 
         }
     }
 
-    // TODO: test with clipping rect and sub rect
     pub fn scaled(
         b: &mut Buffer,
         src: &Buffer,
@@ -341,19 +338,11 @@ mod draw_buffer {
             let mut pd = &mut b.pixels[(x + (y + iy as i32) * b.w) as usize..];
             let ps = &src.pixels[(sub.x + (sub.y + iy as i32) * src.w) as usize..];
             let (mut d_off, mut s_off) = (0, 0);
-            for _ in 0..sub.w {
+            for _ in (0..sub.w).rev() {
                 blend_pixel(&b.mode, &mut pd[d_off], ps[s_off]);
                 d_off += 1;
                 s_off += 1;
             }
-            /* TODO: check if this is the same */
-            // let mut ix = sub.w;
-            // while ix > 0 {
-            //     blend_pixel(&b.mode, &mut pd[d_off], ps[s_off]);
-            //     d_off += 1;
-            //     s_off += 1;
-            //     ix -= 1;
-            // }
         }
     }
 
@@ -635,30 +624,23 @@ const RGB_MASK: u32 = 0xffffff00;
               not(feature = "MODE_ABGR"))))]
 const RGB_MASK: u32 = 0xff_ffff;
 
-static mut INITED: bool = false;
-static mut DIV8_TABLE: [[u8; 256]; 256] = [[0; 256]; 256];
+lazy_static! {
+    static ref DIV8_TABLE: [[u8; 256]; 256] = {
+        let mut div8 = [[0; 256]; 256];
+        for b in 1..256 {
+            for (a, t) in div8.iter_mut().enumerate().take(256).skip(1) {
+                t[b] = ((a << 8) / b) as u8;
+            }
+        }
+        div8
+    };
+}
 
 const FX_BITS: u32 = 12;
 const FX_UNIT: u32 = 1 << FX_BITS;
 // const FX_MASK: u32 = FX_UNIT - 1;
 
 const PI2: f32 = ::std::f32::consts::PI * 2f32;
-
-fn init_8bit() {
-    unsafe {
-        if INITED {
-            return;
-        }
-        /* Init 8bit divide lookup table */
-        for b in 1..256 {
-            for (a, t) in DIV8_TABLE.iter_mut().enumerate().take(256).skip(1) {
-                t[b] = ((a << 8) / b) as u8;
-            }
-        }
-        /* Inited */
-        INITED = true;
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PixelFormat {
@@ -1004,8 +986,6 @@ impl Buffer {
         if h < 1 {
             panic!("expected height of 1 or greater")
         }
-        /* Init lookup tables if not inited */
-        init_8bit();
         let black = Pixel::color(0, 0, 0);
         let mut buf = Buffer {
             w,

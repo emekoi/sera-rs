@@ -3,6 +3,9 @@ name = "sera"
 version = "0.1.0"
 authors = ["emekoi <emekankurumeh@outlook.com>"]
 
+[dependencies]
+lazy_static = "1.0.0"
+
 [dev-dependencies]
 rand = "*"
 sdl2 = "*"

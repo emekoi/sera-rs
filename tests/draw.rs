@@ -58,7 +58,7 @@ fn draw_buffer_basic(buf: &mut Buffer) {
     b.draw_circle(Pixel::color(255, 255, 0), d, d, 16);
     b.draw_ring(Pixel::color(255, 0, 255), d, d, 96);
     b.draw_pixel(Pixel::color(255, 255, 255), 128, 128);
-    buf.draw(&b, 0, 0, None, None);
+    buf.draw(&b, 10, -15, None, None);
 }
 
 fn draw_buffer_scaled(buf: &mut Buffer) {
@@ -74,8 +74,8 @@ fn draw_buffer_scaled(buf: &mut Buffer) {
     b.draw_pixel(Pixel::color(255, 255, 255), 128, 128);
     buf.draw(
         &b,
-        0,
-        0,
+        -40,
+        -23,
         None,
         Some(Transform::new(0.0, 0.0, 0.0, 3.0, 2.0)),
     );
