@@ -93,7 +93,7 @@ macro_rules! impl_neg {
 #[inline]
 fn xdiv_i32(n: i32, x: i32) -> i32 {
     match x {
-        0 => 0,
+        0 => n,
         _ => n / x,
     }
 }
@@ -101,7 +101,7 @@ fn xdiv_i32(n: i32, x: i32) -> i32 {
 #[inline]
 fn xdiv_f32(n: f32, x: f32) -> f32 {
     if x == 0f32 {
-        0f32
+        n
     } else {
         n / x
     }
