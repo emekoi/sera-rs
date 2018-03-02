@@ -17,9 +17,14 @@ fn draw_noise(buf: &mut Buffer) {
     buf.copy_pixels(&b, 0, 0, None, 4.0, 4.0);
 }
 
-// fn draw_flood_fill(buf: &mut Buffer) {
-//    buf.flood_fill(Pixel::color(0, 0, 0), 0, 0);
-// }
+fn draw_flood_fill(buf: &mut Buffer) {
+    let mut rng = rand::thread_rng();
+    let (r, g, b) = (
+        rng.gen::<u8>(),
+        rng.gen::<u8>(),
+        rng.gen::<u8>());
+   buf.flood_fill(Pixel::color(r, g, b), 0, 0);
+}
 
 fn draw_pixel(buf: &mut Buffer) {
     buf.draw_pixel(Pixel::color(255, 255, 0), 255, 255);
@@ -136,6 +141,7 @@ fn draw_test() {
     let mut event_pump = ctx.event_pump().unwrap();
     let max_fps = 60;
     let tests: Vec<fn(&mut Buffer)> = vec![
+        draw_flood_fill,
         draw_noise,
         draw_pixel,
         draw_line,

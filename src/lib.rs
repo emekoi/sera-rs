@@ -118,7 +118,7 @@ fn clip_rect(r: &mut Rect, to: &Rect) {
     r.h = (y2 - y1).max(0);
 }
 
-fn clip_rect_offset(r: &mut Rect, x: &mut i32, y: &mut i32, to: &mut Rect) {
+fn clip_rect_offset(r: &mut Rect, x: &mut i32, y: &mut i32, to: Rect) {
     let _d = to.x - *x;
     if _d > 0 {
         *x += _d;
@@ -141,31 +141,29 @@ fn clip_rect_offset(r: &mut Rect, x: &mut i32, y: &mut i32, to: &mut Rect) {
     }
 }
 
-//fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
-//    unsafe {
-//        if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize] != o {
-//            return;
-//        }
-//        /* Fill left */
-//        let mut il = x;
-//        while il >= 0 && b.pixels[(il + y * b.w) as usize] == o {
-//            b.pixels[(il + y * b.w) as usize] = color;
-//            il -= 1;
-//        }
-//        /* Fill right */
-//        let mut ir = if x < b.w - 1 { x + 1 } else { x };
-//        while ir < b.w && b.pixels[(ir + y * b.w) as usize] == o {
-//            b.pixels[(ir + y * b.w) as usize] = color;
-//            ir += 1;
-//        }
-//        /* Fill up and down */
-//        while il <= ir {
-//            flood_fill(b, color, o, il, y - 1);
-//            flood_fill(b, color, o, il, y + 1);
-//            il += 1;
-//        }
-//    }
-//}
+fn flood_fill(b: &mut Buffer, color: Pixel, o: Pixel, x: i32, y: i32) {
+   if y < 0 || y >= b.h || x < 0 || x >= b.w || b.pixels[(x + y * b.w) as usize] != o {
+       return;
+   }
+   /* Fill left */
+   let mut il = x;
+   while il >= 0 && b.pixels[(il + y * b.w) as usize] == o {
+       b.pixels[(il + y * b.w) as usize] = color;
+       il -= 1;
+   }
+   /* Fill right */
+   let mut ir = if x < b.w - 1 { x + 1 } else { x };
+   while ir < b.w && b.pixels[(ir + y * b.w) as usize] == o {
+       b.pixels[(ir + y * b.w) as usize] = color;
+       ir += 1;
+   }
+   /* Fill up and down */
+   while il <= ir {
+       flood_fill(b, color, o, il, y - 1);
+       flood_fill(b, color, o, il, y + 1);
+       il += 1;
+   }
+}
 
 fn blend_pixel(m: &DrawMode, d: &mut Pixel, mut s: Pixel) {
     unsafe {
@@ -253,7 +251,7 @@ mod copy_pixel {
 
     pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
         /* Clip to destination buffer */
-        clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
+        clip_rect_offset(&mut sub, &mut x, &mut y, b.clip);
         /* Clipped off screen? */
         if sub.w <= 0 || sub.h <= 0 {
             return;
@@ -328,7 +326,7 @@ mod draw_buffer {
 
     pub fn basic(b: &mut Buffer, src: &Buffer, mut x: i32, mut y: i32, mut sub: Rect) {
         /* Clip to destination buffer */
-        clip_rect_offset(&mut sub, &mut x, &mut y, &mut b.clip);
+        clip_rect_offset(&mut sub, &mut x, &mut y, b.clip);
         /* Clipped off screen? */
         if sub.w <= 0 || sub.h <= 0 {
             return;
@@ -1161,11 +1159,10 @@ impl Buffer {
         }
     }
 
-    // overflows the stack
-    // pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
-    //    let px = self.get_pixel(x, y);
-    //    flood_fill(self, c, px, x, y);
-    // }
+    pub fn flood_fill(&mut self, c: Pixel, x: i32, y: i32) {
+       let px = self.get_pixel(x, y);
+       flood_fill(self, c, px, x, y);
+    }
 
     pub fn draw_pixel(&mut self, c: Pixel, x: i32, y: i32) {
         let org = self.org;
