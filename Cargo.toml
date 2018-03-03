@@ -5,11 +5,12 @@ authors = ["emekoi <emekankurumeh@outlook.com>"]
 
 [dependencies]
 lazy_static = "1.0.0"
+stb_image = "0.2.2"
+
 
 [dev-dependencies]
 rand = "*"
 sdl2 = "*"
-# png = "0.11.0"
 
 [features]
 default = []
