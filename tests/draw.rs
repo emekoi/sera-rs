@@ -19,11 +19,8 @@ fn draw_noise(buf: &mut Buffer) {
 
 fn draw_flood_fill(buf: &mut Buffer) {
     let mut rng = rand::thread_rng();
-    let (r, g, b) = (
-        rng.gen::<u8>(),
-        rng.gen::<u8>(),
-        rng.gen::<u8>());
-   buf.flood_fill(Pixel::color(r, g, b), 0, 0);
+    let (r, g, b) = (rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>());
+    buf.flood_fill(Pixel::color(r, g, b), 0, 0);
 }
 
 fn draw_pixel(buf: &mut Buffer) {
@@ -136,7 +133,7 @@ fn draw_test() {
         .position_centered()
         .build()
         .unwrap();
-    let mut buffer = Buffer::new(512i32, 512i32);
+    let mut buffer = Buffer::new(512, 512);
     buffer.set_alpha(255);
     let mut event_pump = ctx.event_pump().unwrap();
     let max_fps = 60;
