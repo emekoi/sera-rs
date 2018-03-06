@@ -1,8 +1,15 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate stb_image;
+/*
+https://github.com/redox-os/rusttype/issues/61
+*/
 
+use std::path::Path;
 use std::ops::{Add, Div, Mul, Neg, Sub};
-use std::{fmt, mem, f32};
+use std::{fmt, mem, slice, f32};
+
+use stb_image::image;
 
 macro_rules! lerp {
   ($bits:expr, $a:expr, $b:expr, $p:expr) => {
@@ -579,6 +586,9 @@ mod draw_buffer {
     }
 }
 
+//const DEFAULT_FONT_DATA: &[u8] = include_bytes!("fonts/TinyUnicode.ttf");
+//const DEFAULT_FONT_SIZE: usize = 16;
+
 #[cfg(feature = "MODE_RGBA")]
 const RGB_MASK: u32 = 0xff_ffff;
 #[cfg(feature = "MODE_ARGB")]
@@ -978,6 +988,42 @@ impl Buffer {
         };
         buf.reset();
         buf
+    }
+
+    pub fn file<T: AsRef<Path>>(file: T) -> Option<Buffer> {
+        let res = image::load_with_depth(file, 4, false);
+        if let image::LoadResult::ImageU8(img) = res {
+            unsafe {
+                let mut buf = Buffer::new(img.width as i32, img.height as i32);
+                buf.load_pixels(
+                    slice::from_raw_parts_mut(
+                        mem::transmute(img.data.as_ptr()),
+                        mem::size_of::<u8>() * img.data.len(),
+                    ),
+                    PixelFormat::RGBA,
+                );
+                return Some(buf);
+            }
+        }
+        None
+    }
+
+    pub fn bytes<T: AsRef<[u8]>>(bytes: T) -> Option<Buffer> {
+        let res = image::load_from_memory_with_depth(bytes.as_ref(), 4, false);
+        if let image::LoadResult::ImageU8(img) = res {
+            unsafe {
+                let mut buf = Buffer::new(img.width as i32, img.height as i32);
+                buf.load_pixels(
+                    slice::from_raw_parts_mut(
+                        mem::transmute(img.data.as_ptr()),
+                        mem::size_of::<T>() * img.data.len(),
+                    ),
+                    PixelFormat::RGBA,
+                );
+                return Some(buf);
+            }
+        }
+        None
     }
 
     pub fn clone(&mut self) -> Buffer {

@@ -6,6 +6,7 @@ authors = ["emekoi <emekankurumeh@outlook.com>"]
 [dependencies]
 lazy_static = "1.0.0"
 stb_image = "0.2.2"
+rusttype = "0.4.1"
 
 
 [dev-dependencies]
