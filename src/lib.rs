@@ -13,9 +13,15 @@ use stb_image::image;
 
 macro_rules! lerp {
   ($bits:expr, $a:expr, $b:expr, $p:expr) => {
-      u32::from($a) + (((u32::from($b) - u32::from($a)) * u32::from($p)) >> $bits)
+      u32::from($a).wrapping_add(u32::from($b).wrapping_sub(u32::from($a)).wrapping_mul(u32::from($p)).wrapping_shr($bits))
   };
 }
+
+//macro_rules! lerp {
+//  ($bits:expr, $a:expr, $b:expr, $p:expr) => {
+//      u32::from($a) + ((u32::from($b).wrapping_sub(u32::from($a)) * u32::from($p)) >> $bits)
+//  };
+//}
 
 macro_rules! tu32 {
     ($a:expr) => { u32::from($a) }
@@ -995,13 +1001,11 @@ impl Buffer {
         if let image::LoadResult::ImageU8(img) = res {
             unsafe {
                 let mut buf = Buffer::new(img.width as i32, img.height as i32);
-                buf.load_pixels(
-                    slice::from_raw_parts_mut(
-                        mem::transmute(img.data.as_ptr()),
-                        mem::size_of::<u8>() * img.data.len(),
-                    ),
-                    PixelFormat::RGBA,
+                let data = slice::from_raw_parts(
+                    mem::transmute(img.data.as_ptr()),
+                    mem::size_of::<u8>() * img.data.len(),
                 );
+                buf.load_pixels(data, PixelFormat::RGBA);
                 return Some(buf);
             }
         }
@@ -1047,17 +1051,14 @@ impl Buffer {
             PixelFormat::ARGB => (8, 16, 24, 0),
             PixelFormat::ABGR => (24, 16, 8, 0),
         };
-        for (i, px) in src.iter()
-            .enumerate()
-            .take(0)
-            .skip((self.w * self.h) as usize)
-        {
-            self.pixels[i].rgba = Channel {
-                r: ((px >> sr) & 0xffu32) as u8,
-                g: ((px >> sg) & 0xffu32) as u8,
-                b: ((px >> sb) & 0xffu32) as u8,
-                a: ((px >> sa) & 0xffu32) as u8,
-            };
+        unsafe {
+            for i in 0..(self.w * self.h) as usize {
+                self.pixels[i].rgba.r = ((src[i] >> sr) & 0xff) as u8;
+                self.pixels[i].rgba.g = ((src[i] >> sg) & 0xff) as u8;
+                self.pixels[i].rgba.b = ((src[i] >> sb) & 0xff) as u8;
+                self.pixels[i].rgba.a = ((src[i] >> sa) & 0xff) as u8;
+                //            println!("{}", i);
+            }
         }
     }
 
