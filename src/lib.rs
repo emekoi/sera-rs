@@ -2,6 +2,7 @@
 extern crate lazy_static;
 extern crate rusttype;
 extern crate stb_image;
+extern crate uluru;
 
 #[macro_use]
 mod macros;
@@ -18,6 +19,7 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{fmt, mem, slice, f32};
 
 use stb_image::image;
+use rusttype::{point, FontCollection, PositionedGlyph, Scale};
 
 use util::*;
 
@@ -31,8 +33,8 @@ const FX_MASK_10: u32 = FX_UNIT_10 - 1;
 
 const PI2: f32 = ::std::f32::consts::PI * 2f32;
 
-// const DEFAULT_FONT_DATA: &[u8] = include_bytes!("fonts/TinyUnicode.ttf");
-// const DEFAULT_FONT_SIZE: usize = 16;
+const DEFAULT_FONT_DATA: &[u8] = include_bytes!("embed/default.ttf");
+const DEFAULT_FONT_SIZE: f32 = 16.0;
 
 #[cfg(feature = "MODE_RGBA")]
 const RGB_MASK: u32 = 0xff_ffff;
@@ -411,6 +413,11 @@ impl_neg!(Transform, |s: Transform| -> Transform {
     }
 });
 
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct Font {
+//
+// }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Buffer {
     pub mode: DrawMode,
@@ -474,12 +481,12 @@ impl Buffer {
         None
     }
 
-    pub fn clone(&mut self) -> Buffer {
-        let pixels = self.pixels.clone();
-        let mut buf = Buffer::new(self.w, self.h);
-        buf.pixels = pixels.clone();
-        buf
-    }
+    // pub fn clone(&mut self) -> Buffer {
+    //     let pixels = self.pixels.clone();
+    //     let mut buf = Buffer::new(self.w, self.h);
+    //     buf.pixels = pixels.clone();
+    //     buf
+    // }
 
     pub fn resize(&mut self, w: i32, h: i32) {
         self.w = w;
@@ -501,13 +508,12 @@ impl Buffer {
                 self.pixels[i].rgba.g = ((src[i] >> sg) & 0xff) as u8;
                 self.pixels[i].rgba.b = ((src[i] >> sb) & 0xff) as u8;
                 self.pixels[i].rgba.a = ((src[i] >> sa) & 0xff) as u8;
-                //            println!("{}", i);
             }
         }
     }
 
     pub fn load_pixels8(&mut self, src: &[u8], pal: Option<&[Pixel]>) {
-        for i in (self.w * self.h) as usize..0 {
+        for i in (0..(self.w * self.h) as usize).rev() {
             self.pixels[i] = match pal {
                 Some(pal) => pal[src[i] as usize],
                 None => Pixel::pixel(0xff, 0xff, 0xff, src[i]),
@@ -784,6 +790,14 @@ impl Buffer {
         }
     }
 
+    pub fn draw_text<'a>(&mut self, c: Pixel, font: Font<'a>, txt: &str, x: i32, y: i32) {
+        let txt = font.render(txt);
+        let oldc = self.mode.color;
+        self.set_color(c);
+        self.draw(&txt, x, y, None, None);
+        self.set_color(oldc);
+    }
+
     pub fn draw(
         &mut self,
         src: &Buffer,
@@ -1051,83 +1065,119 @@ impl Buffer {
 }
 
 pub struct Font<'a> {
-    pub data: &'a [u8],
     font: rusttype::Font<'a>,
     ptsize: f32,
-    scale: f32,
-    baseline: i32,
+    offset: f32,
 }
 
 impl<'a> Font<'a> {
-    pub fn new(data: &'a [u8], ptsize: f32) -> Font<'a> {
+    pub fn new(data: &'a [u8], ptsize: Option<f32>) -> Font<'a> {
         let mut font = Font {
-            data: data.clone(),
-            font: rusttype::FontCollection::from_bytes(data)
+            font: FontCollection::from_bytes(data).into_font().unwrap(),
+            ptsize: 0.0,
+            offset: 0.0,
+        };
+        font.ptsize(ptsize.unwrap_or(DEFAULT_FONT_SIZE));
+        font
+    }
+
+    pub fn default(ptsize: Option<f32>) -> Font<'a> {
+        let mut font = Font {
+            font: FontCollection::from_bytes(DEFAULT_FONT_DATA)
                 .into_font()
                 .unwrap(),
             ptsize: 0.0,
-            scale: 0.0,
-            baseline: 0,
+            offset: 0.0,
         };
-        font.ptsize(ptsize);
+        font.ptsize(ptsize.unwrap_or(DEFAULT_FONT_SIZE));
         font
     }
 
     pub fn ptsize(&mut self, ptsize: f32) {
-        let v = self.font.v_metrics_unscaled();
         self.ptsize = ptsize;
-        self.scale = self.font.units_per_em() as f32 / self.ptsize;
-        self.baseline = (v.ascent * self.scale + 1.0) as i32;
+        let v = self.font.v_metrics(Scale::uniform(self.ptsize));
+        self.offset = v.ascent;
     }
 
     pub fn height(&self) -> i32 {
-        let v = self.font.v_metrics_unscaled();
-        ((v.ascent - v.descent + v.line_gap) * self.scale).ceil() as i32 + 1
+        let v = self.font.v_metrics(Scale::uniform(self.ptsize));
+        (v.ascent - v.descent + v.line_gap).ceil() as i32
     }
 
-    pub fn width(&self) -> i32 {
-        512
+    pub fn width(&self, txt: &str) -> i32 {
+        let glyphs: Vec<PositionedGlyph> = self.font
+            .layout(txt, Scale::uniform(self.ptsize), point(0.0, self.offset))
+            .collect();
+        glyphs
+            .iter()
+            .rev()
+            .map(|g| g.position().x as f32 + g.unpositioned().h_metrics().advance_width)
+            .next()
+            .unwrap_or(0.0)
+            .ceil() as i32
     }
 
-    pub fn render(&self) -> Buffer {
-        let buf = Buffer::new(self.width(), self.height());
-        let (w, h) = buf.get_size();
-        let pixels = vec![0; w * h]
-        /*
-        *w = ttf_width(self, str);
-        *h = ttf_height(self);
-        void *pixels = calloc(1, *w * *h);
-        if (!pixels) return NULL;
-        const char *p = str;
-        float xoffset = 0;
-        float xfract = 0;
-        int last = 0;
-        while (*p) {
-        /* Get unicode codepoint */
-        unsigned c;
-        p = ttf_utf8toCodepoint(p, &c);
-        /* Get char placement coords */
-        int x0, y0, x1, y1;
-        stbtt_GetCodepointBitmapBoxSubpixel(
-          &self->font, c, self->scale, self->scale, xfract, 0,
-          &x0, &y0, &x1, &y1);
-        /* Work out position / max size */
-        int x = xoffset + x0;
-        int y = self->baseline + y0;
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
-        /* Render char */
-        stbtt_MakeCodepointBitmapSubpixel(
-          &self->font,
-          pixels + x + (y * *w),
-          *w - x, *h - y, *w, self->scale, self->scale,
-          xfract, 0, c);
-        /* Next */
-        xoffset += ttf_charWidthf(self, c, last);
-        xfract = xoffset - (int) xoffset;
-        last = c;
+    /* kinda does what it is suposed to */
+    // pub fn render(&self, txt: &str) -> Buffer {
+    //     let scale = Scale::uniform(self.ptsize);
+    //
+    //     let font_iter = self.font.glyphs_for(txt.chars()).scan(
+    //         (None, 0.0),
+    //         |&mut (ref mut last, ref mut x), g| {
+    //             let g = g.scaled(scale);
+    //             let w = g.h_metrics().advance_width + last.map(|last| {
+    //                 self.font.pair_kerning(scale, last, g.id())
+    //             }).unwrap_or(0.0);
+    //             let w = w.round();
+    //             let next = g.positioned(point(0.0, self.offset) + vector(*x, 0.0));
+    //             *last = Some(next.id());
+    //             *x += w;
+    //             Some(next)
+    //         },
+    //     );
+    //
+    //     let glyphs: Vec<PositionedGlyph> = font_iter.collect();
+    //
+    //     let (width, height) = (self.width(txt), self.height());
+    //     let mut buf = Buffer::new(width, height);
+    //     let mut pixels = vec![0; (width * height) as usize];
+    //
+    //     for g in glyphs {
+    //         if let Some(bounding_box) = g.pixel_bounding_box() {
+    //             g.draw(|x, y, v| {
+    //                 let v = v.round() as u8 * 255;
+    //                 let x = x + bounding_box.min.x as u32;
+    //                 let y = y + bounding_box.min.y as u32;
+    //                 pixels[(x + y * width as u32) as usize] = v;
+    //             });
+    //         }
+    //     }
+    //     buf.load_pixels8(&pixels, None);
+    //     buf
+    // }
+
+    pub fn render(&self, txt: &str) -> Buffer {
+        let scale = Scale::uniform(self.ptsize);
+
+        let glyphs: Vec<PositionedGlyph> = self.font
+            .layout(&txt, scale, point(0.0, self.offset))
+            .collect();
+
+        let (width, height) = (self.width(txt), self.height());
+        let mut buf = Buffer::new(width, height);
+        let mut pixels = vec![0; (width * height) as usize];
+
+        for g in glyphs {
+            if let Some(bounding_box) = g.pixel_bounding_box() {
+                g.draw(|x, y, v| {
+                    let v = v.round() as u8 * 255;
+                    let x = x + bounding_box.min.x as u32;
+                    let y = y + bounding_box.min.y as u32;
+                    pixels[(x + y * width as u32) as usize] = v;
+                });
+            }
         }
-        */
+        buf.load_pixels8(&pixels, None);
         buf
     }
 }

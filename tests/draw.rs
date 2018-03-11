@@ -16,13 +16,25 @@ use rand::{Rng, ThreadRng};
 const MAX_FPS: u32 = 60;
 
 const STROKE: [[i32; 2]; 8] = [
-    [ -1, -1 ], [ -1,  0 ], [ -1,  1 ],
-    [ -0, -1 ],             [ -0,  1 ],
-    [  1, -1 ], [  1,  0 ], [  1,  1 ],
+    [-1, -1],
+    [-1, 0],
+    [-1, 1],
+    [-0, -1],
+    [-0, 1],
+    [1, -1],
+    [1, 0],
+    [1, 1],
 ];
 
 lazy_static! {
     static ref IMAGE: Buffer = Buffer::file("tests/cat.png").unwrap();
+    static ref TEXT: Buffer = {
+        let txt = Font::default(None) .render("AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz");
+        let mut buf = Buffer::new(txt.w, txt.h);
+        buf.clear(Pixel::color(0, 0, 0));
+        buf.draw(&txt, 0, 0, None, None);
+        buf
+    };
 }
 
 fn random_color(rng: &mut ThreadRng) -> Pixel {
@@ -83,6 +95,7 @@ fn draw_ring(buf: &mut Buffer, rng: &mut ThreadRng) {
 
 fn draw_buffer_basic(buf: &mut Buffer, _: &mut ThreadRng) {
     buf.draw(&IMAGE, 0, 0, None, None);
+    buf.draw(&TEXT, 0, 0, None, None)
 }
 
 fn draw_buffer_scaled(buf: &mut Buffer, _: &mut ThreadRng) {
@@ -183,7 +196,7 @@ fn draw_test() {
                 } => {
                     current = (current + 1) % count;
                     buffer.clear(Pixel { word: 0xffffffff });
-                },
+                }
                 Event::KeyDown {
                     keycode: Some(Keycode::Left),
                     ..

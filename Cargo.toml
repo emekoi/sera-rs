@@ -8,6 +8,7 @@ lazy_static = "1.0.0"
 stb_image = "0.2.2"
 rusttype = "0.4.1"
 unicode-normalization = "0.1.5"
+uluru = "0.2.0"
 
 
 [dev-dependencies]
